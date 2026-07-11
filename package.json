@@ -1,6 +1,6 @@
 {
   "name": "ejurnal-guru",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Aplikasi desktop E-Jurnal Guru untuk macOS Apple Silicon",
   "main": "./out/main/index.js",
   "author": "E-Jurnal Guru",
@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "verify": "npm run typecheck && npm run build",
     "dist:dev": "cross-env APP_ENV=dev electron-vite build && electron-builder --config electron-builder.dev.yml --mac dir --arm64",
-    "dist:prod": "cross-env APP_ENV=prod electron-vite build && electron-builder --config electron-builder.prod.yml --mac dmg zip --arm64",
+    "dist:prod": "cross-env APP_ENV=prod electron-vite build && electron-builder --config electron-builder.prod.yml --mac dmg zip --arm64 --publish never",
     "release:prod": "cross-env APP_ENV=prod electron-vite build && electron-builder --config electron-builder.prod.yml --mac dmg zip --arm64 --publish always",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",
