@@ -10,16 +10,28 @@ interface Props {
 }
 
 type YearWithSemesters = AcademicYear & { semesters: Semester[] }
+type LoginRole = 'GURU' | 'ADMIN'
+
+const usernameStorageKey = (role: LoginRole): string =>
+  `ejurnal.login.username.${role.toLowerCase()}`
 
 export default function LoginPage({ onLogin }: Props): JSX.Element {
-  const [role, setRole] = useState<'GURU' | 'ADMIN'>('GURU')
+  const [role, setRole] = useState<LoginRole>('GURU')
   const [username, setUsername] = useState('')
   const [code, setCode] = useState('')
+  const [rememberUsername, setRememberUsername] = useState(false)
   const [years, setYears] = useState<YearWithSemesters[]>([])
   const [yearId, setYearId] = useState<number | ''>('')
   const [semesterId, setSemesterId] = useState<number | ''>('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const remembered = window.localStorage.getItem(usernameStorageKey(role))
+    setUsername(remembered ?? '')
+    setRememberUsername(Boolean(remembered))
+    setCode('')
+  }, [role])
 
   useEffect(() => {
     window.api.auth.options().then((response) => {
@@ -45,16 +57,26 @@ export default function LoginPage({ onLogin }: Props): JSX.Element {
     event.preventDefault()
     setLoading(true)
     setError('')
+
+    const normalizedUsername = username.trim()
+
     try {
       const session = unwrap<LoginSession>(
         await window.api.auth.login({
           role,
-          username,
+          username: normalizedUsername,
           code,
           academicYearId: role === 'GURU' ? yearId : undefined,
           semesterId: role === 'GURU' ? semesterId : undefined
         })
       )
+
+      if (rememberUsername) {
+        window.localStorage.setItem(usernameStorageKey(role), normalizedUsername)
+      } else {
+        window.localStorage.removeItem(usernameStorageKey(role))
+      }
+
       onLogin(session)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Login gagal.')
@@ -106,12 +128,44 @@ export default function LoginPage({ onLogin }: Props): JSX.Element {
           <div className="mt-6 space-y-4">
             <div>
               <label className="label"><UserRound size={13} className="mr-1 inline" /> Username</label>
-              <input className="field" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={role === 'ADMIN' ? 'root' : 'Username guru'} autoFocus />
+              <input
+                className="field"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder={role === 'ADMIN' ? 'root' : 'Username guru'}
+                autoComplete="username"
+                autoFocus
+              />
             </div>
+
             <div>
               <label className="label"><LockKeyhole size={13} className="mr-1 inline" /> Kode</label>
-              <input className="field" type="password" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Masukkan kode akses" />
+              <input
+                className="field"
+                type="password"
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                placeholder="Masukkan kode akses"
+                autoComplete="current-password"
+              />
             </div>
+
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-slate-200 px-4 py-3">
+              <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={rememberUsername}
+                  onChange={(event) => {
+                    const checked = event.target.checked
+                    setRememberUsername(checked)
+                    if (!checked) window.localStorage.removeItem(usernameStorageKey(role))
+                  }}
+                  className="h-4 w-4 accent-indigo-600"
+                />
+                Ingat username
+              </span>
+              <span className="text-xs text-slate-400">Kode tidak disimpan</span>
+            </label>
 
             {role === 'GURU' && (
               <div className="grid grid-cols-2 gap-4">
@@ -134,12 +188,16 @@ export default function LoginPage({ onLogin }: Props): JSX.Element {
                     }}
                   />
                 </div>
+
                 <div>
                   <label className="label">Semester</label>
                   <Select
                     value={semesterId}
                     placeholder="Pilih semester"
-                    options={semesters.map((semester) => ({ value: semester.id, label: semester.name === 'GANJIL' ? 'Ganjil' : 'Genap' }))}
+                    options={semesters.map((semester) => ({
+                      value: semester.id,
+                      label: semester.name === 'GANJIL' ? 'Ganjil' : 'Genap'
+                    }))}
                     onChange={(value) => setSemesterId(Number(value))}
                   />
                 </div>
@@ -154,12 +212,17 @@ export default function LoginPage({ onLogin }: Props): JSX.Element {
           )}
 
           {error && <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div>}
+
           {role === 'GURU' && years.length === 0 && (
-            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Admin perlu membuat tahun ajaran terlebih dahulu.</div>
+            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Admin perlu membuat tahun ajaran terlebih dahulu.
+            </div>
           )}
+
           <button className="btn-primary mt-6 w-full py-3" disabled={loading || (role === 'GURU' && (!yearId || !semesterId))}>
             {loading ? 'Memeriksa...' : 'Masuk'}
           </button>
+
           {role === 'ADMIN' && <p className="mt-4 text-center text-xs text-slate-400">Akun awal: root / 0102</p>}
         </form>
       </section>
