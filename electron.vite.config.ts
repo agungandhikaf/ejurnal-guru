@@ -2,8 +2,15 @@ import { resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 
+const appEnvironment = process.env.APP_ENV === 'prod' ? 'prod' : 'dev'
+
 export default defineConfig({
   main: {
+    define: {
+      // Tanam environment ke bundle main process saat build agar nilai tetap
+      // tersedia ketika aplikasi hasil DMG dijalankan.
+      'process.env.APP_ENV': JSON.stringify(appEnvironment)
+    },
     plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
