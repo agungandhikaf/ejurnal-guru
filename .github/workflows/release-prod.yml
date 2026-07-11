@@ -76,8 +76,7 @@ jobs:
       - name: Build macOS Apple Silicon artifacts
         env:
           # Jika secret signing belum tersedia, electron-builder menghasilkan unsigned build.
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run dist:prod
 
       - name: Verify release artifacts
