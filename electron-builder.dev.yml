@@ -15,7 +15,10 @@ extraResources:
       - "**/*.xlsx"
 mac:
   target:
-    - target: dir
+    - target: dmg
+      arch:
+        - arm64
+    - target: zip
       arch:
         - arm64
   category: public.app-category.education
