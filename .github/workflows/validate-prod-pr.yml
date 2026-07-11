@@ -1,0 +1,97 @@
+name: Validate PR to prod
+
+on:
+  pull_request:
+    branches:
+      - prod
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+concurrency:
+  group: validate-prod-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Typecheck, build, and package validation
+    if: github.event.pull_request.draft == false
+    runs-on: macos-14
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce dev to prod flow
+        shell: bash
+        run: |
+          if [[ "${GITHUB_HEAD_REF}" != "dev" ]]; then
+            echo "PR ke branch prod hanya boleh berasal dari branch dev."
+            echo "Branch sumber saat ini: ${GITHUB_HEAD_REF}"
+            exit 1
+          fi
+
+      - name: Set up Node.js from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Show build environment
+        run: |
+          node --version
+          npm --version
+          uname -m
+
+      - name: Validate production version bump
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          BASE_VERSION=$(git show "${BASE_SHA}:package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+          HEAD_VERSION=$(node -p "require('./package.json').version")
+
+          echo "Versi prod saat ini : ${BASE_VERSION}"
+          echo "Versi kandidat       : ${HEAD_VERSION}"
+
+          BASE_VERSION="${BASE_VERSION}" HEAD_VERSION="${HEAD_VERSION}" node <<'NODE'
+          const base = process.env.BASE_VERSION
+          const head = process.env.HEAD_VERSION
+          const stableSemver = /^\d+\.\d+\.\d+$/
+
+          if (!stableSemver.test(base) || !stableSemver.test(head)) {
+            console.error('Versi production harus memakai format stabil MAJOR.MINOR.PATCH, contoh 1.0.1.')
+            process.exit(1)
+          }
+
+          const toNumbers = (value) => value.split('.').map(Number)
+          const [baseMajor, baseMinor, basePatch] = toNumbers(base)
+          const [headMajor, headMinor, headPatch] = toNumbers(head)
+          const baseNumber = baseMajor * 1_000_000 + baseMinor * 1_000 + basePatch
+          const headNumber = headMajor * 1_000_000 + headMinor * 1_000 + headPatch
+
+          if (headNumber <= baseNumber) {
+            console.error(`Versi kandidat (${head}) harus lebih tinggi daripada versi prod (${base}).`)
+            process.exit(1)
+          }
+          NODE
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Compile application
+        run: npm run build
+
+      - name: Validate Apple Silicon package
+        run: npm run dist:dev

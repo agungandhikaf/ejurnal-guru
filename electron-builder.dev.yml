@@ -1,0 +1,23 @@
+appId: com.ejurnal.guru.dev
+productName: E-Jurnal Guru Dev
+directories:
+  output: release/dev
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  - node_modules/better-sqlite3/**
+
+extraResources:
+  - from: resources/templates
+    to: templates
+    filter:
+      - "**/*.xlsx"
+mac:
+  target:
+    - target: dir
+      arch:
+        - arm64
+  category: public.app-category.education
+  identity: null
+npmRebuild: true

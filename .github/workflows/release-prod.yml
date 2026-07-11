@@ -1,0 +1,150 @@
+name: Build and release prod
+
+on:
+  push:
+    branches:
+      - prod
+  workflow_dispatch:
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build macOS arm64 and publish release
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    env:
+      # Default: release dibuat pada repository source yang sama.
+      # Untuk repository release terpisah, isi Repository Variables:
+      # RELEASE_OWNER dan RELEASE_REPO.
+      GH_RELEASE_OWNER: ${{ vars.RELEASE_OWNER || github.repository_owner }}
+      GH_RELEASE_REPO: ${{ vars.RELEASE_REPO || github.event.repository.name }}
+
+    steps:
+      - name: Checkout prod
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Show release environment
+        run: |
+          node --version
+          npm --version
+          uname -m
+          echo "Release target: ${GH_RELEASE_OWNER}/${GH_RELEASE_REPO}"
+
+      - name: Resolve and validate release version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+        run: |
+          APP_VERSION=$(node -p "require('./package.json').version")
+
+          if [[ ! "${APP_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Versi harus memakai format stabil MAJOR.MINOR.PATCH. Nilai saat ini: ${APP_VERSION}"
+            exit 1
+          fi
+
+          TARGET_REPOSITORY="${GH_RELEASE_OWNER}/${GH_RELEASE_REPO}"
+          if gh release view "v${APP_VERSION}" --repo "${TARGET_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release v${APP_VERSION} sudah ada di ${TARGET_REPOSITORY}."
+            echo "Naikkan version di package.json pada branch dev, lalu buat PR baru ke prod."
+            exit 1
+          fi
+
+          echo "APP_VERSION=${APP_VERSION}" >> "${GITHUB_ENV}"
+          echo "TARGET_REPOSITORY=${TARGET_REPOSITORY}" >> "${GITHUB_ENV}"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build macOS Apple Silicon artifacts
+        env:
+          # Jika secret signing belum tersedia, electron-builder menghasilkan unsigned build.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: npm run dist:prod
+
+      - name: Verify release artifacts
+        shell: bash
+        run: |
+          shopt -s nullglob
+          DMG_FILES=(release/prod/*.dmg)
+          ZIP_FILES=(release/prod/*.zip)
+
+          if (( ${#DMG_FILES[@]} == 0 )); then
+            echo "File DMG tidak ditemukan di release/prod."
+            exit 1
+          fi
+
+          if (( ${#ZIP_FILES[@]} == 0 )); then
+            echo "File ZIP updater tidak ditemukan di release/prod."
+            exit 1
+          fi
+
+          if [[ ! -f release/prod/latest-mac.yml ]]; then
+            echo "latest-mac.yml tidak ditemukan. Auto-update tidak dapat bekerja."
+            exit 1
+          fi
+
+          ls -lah release/prod
+
+      - name: Store workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: E-Jurnal-Guru-v${{ env.APP_VERSION }}-mac-arm64
+          path: |
+            release/prod/*.dmg
+            release/prod/*.zip
+            release/prod/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+        run: |
+          shopt -s nullglob
+          ASSETS=(
+            release/prod/*.dmg
+            release/prod/*.zip
+            release/prod/latest-mac.yml
+          )
+
+          cat > release-notes.md <<NOTES
+          Build production otomatis dari branch \`prod\`.
+
+          - Versi aplikasi: \`${APP_VERSION}\`
+          - Target: macOS Apple Silicon (arm64)
+          - Source commit: \`${GITHUB_SHA}\`
+          - Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          File DMG digunakan untuk instalasi awal/manual. File ZIP dan \`latest-mac.yml\` digunakan oleh auto-updater.
+          NOTES
+
+          TARGET_ARGS=()
+          if [[ "${TARGET_REPOSITORY}" == "${GITHUB_REPOSITORY}" ]]; then
+            TARGET_ARGS=(--target "${GITHUB_SHA}")
+          fi
+
+          gh release create "v${APP_VERSION}" "${ASSETS[@]}" \
+            --repo "${TARGET_REPOSITORY}" \
+            --title "E-Jurnal Guru v${APP_VERSION}" \
+            --notes-file release-notes.md \
+            "${TARGET_ARGS[@]}"

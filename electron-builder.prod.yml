@@ -1,0 +1,46 @@
+appId: com.ejurnal.guru
+productName: E-Jurnal Guru
+
+directories:
+  output: release/prod
+
+asar: true
+compression: maximum
+artifactName: ${productName}-${version}-${arch}.${ext}
+
+files:
+  - out/**
+  - package.json
+
+asarUnpack:
+  - node_modules/better-sqlite3/**
+
+extraResources:
+  - from: resources/templates
+    to: templates
+    filter:
+      - "**/*.xlsx"
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - arm64
+    - target: zip
+      arch:
+        - arm64
+  category: public.app-category.education
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+
+npmRebuild: true
+
+# Nilai owner/repo diisi oleh GitHub Actions melalui environment.
+# Untuk build manual, export GH_RELEASE_OWNER dan GH_RELEASE_REPO terlebih dahulu.
+publish:
+  provider: github
+  owner: ${env.GH_RELEASE_OWNER}
+  repo: ${env.GH_RELEASE_REPO}
+  releaseType: release
