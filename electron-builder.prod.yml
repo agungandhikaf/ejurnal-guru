@@ -6,7 +6,7 @@ directories:
 
 asar: true
 compression: maximum
-artifactName: ${productName}-${version}-${arch}.${ext}
+artifactName: E-Jurnal-Guru-${version}-${arch}.${ext}
 
 files:
   - out/**
