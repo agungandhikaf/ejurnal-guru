@@ -57,6 +57,20 @@ export interface Student {
   className?: string
 }
 
+export interface StudentImportIssue {
+  rowNumber: number
+  nisn: string
+  reason: string
+}
+
+export interface StudentImportResult {
+  inserted: number
+  updated: number
+  skipped: number
+  issues: StudentImportIssue[]
+  canceled: boolean
+}
+
 export interface AttendanceRow extends Student {
   status: AttendanceStatus
   note: string

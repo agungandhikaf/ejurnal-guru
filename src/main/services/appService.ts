@@ -18,6 +18,8 @@ import type {
   SchoolClass,
   Semester,
   Student,
+  StudentImportIssue,
+  StudentImportResult,
   SummativeGroup,
   Teacher,
   TeachingJournal
@@ -112,11 +114,55 @@ export class AppService {
     if (!input.username.trim() || !input.code.trim() || !input.namaGuru.trim()) {
       throw new Error('Username, kode, dan nama guru wajib diisi.')
     }
+    const username = input.username.trim()
+    const existing = this.database.db
+      .prepare('SELECT id, role, is_active AS isActive FROM users WHERE username = ?')
+      .get(username) as { id: number; role: 'ADMIN' | 'GURU'; isActive: number } | undefined
+    if (existing?.isActive || existing?.role === 'ADMIN') {
+      throw new Error(`Username ${username} sudah digunakan.`)
+    }
+
     const hash = bcrypt.hashSync(input.code, 12)
+    if (existing) {
+      this.database.db
+        .prepare(`UPDATE users SET code_hash = ?, nama_guru = ?, jabatan = ?, is_active = 1,
+                  updated_at = CURRENT_TIMESTAMP WHERE id = ? AND role = 'GURU'`)
+        .run(hash, input.namaGuru.trim(), input.jabatan.trim() || 'Guru', existing.id)
+      return
+    }
+
     this.database.db
       .prepare(`INSERT INTO users(username, code_hash, nama_guru, jabatan, role)
                 VALUES (?, ?, ?, ?, 'GURU')`)
-      .run(input.username.trim(), hash, input.namaGuru.trim(), input.jabatan.trim() || 'Guru')
+      .run(username, hash, input.namaGuru.trim(), input.jabatan.trim() || 'Guru')
+  }
+
+  updateTeacher(input: { id: number; username: string; code?: string; namaGuru: string; jabatan: string }): void {
+    if (!input.username.trim() || !input.namaGuru.trim()) {
+      throw new Error('Username dan nama guru wajib diisi.')
+    }
+    const teacher = this.database.db
+      .prepare("SELECT id FROM users WHERE id = ? AND role = 'GURU'")
+      .get(input.id)
+    if (!teacher) throw new Error('Data guru tidak ditemukan.')
+
+    const duplicate = this.database.db
+      .prepare('SELECT id FROM users WHERE username = ? AND id <> ?')
+      .get(input.username.trim(), input.id)
+    if (duplicate) throw new Error(`Username ${input.username.trim()} sudah digunakan.`)
+
+    if (input.code?.trim()) {
+      this.database.db
+        .prepare(`UPDATE users SET username = ?, code_hash = ?, nama_guru = ?, jabatan = ?,
+                  updated_at = CURRENT_TIMESTAMP WHERE id = ? AND role = 'GURU'`)
+        .run(input.username.trim(), bcrypt.hashSync(input.code, 12), input.namaGuru.trim(), input.jabatan.trim() || 'Guru', input.id)
+      return
+    }
+
+    this.database.db
+      .prepare(`UPDATE users SET username = ?, nama_guru = ?, jabatan = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND role = 'GURU'`)
+      .run(input.username.trim(), input.namaGuru.trim(), input.jabatan.trim() || 'Guru', input.id)
   }
 
   toggleTeacher(id: number): void {
@@ -165,24 +211,63 @@ export class AppService {
     transaction()
   }
 
-  listClasses(academicYearId: number): SchoolClass[] {
+  listClasses(academicYearId: number, includeInactive = false): SchoolClass[] {
     return this.database.db
       .prepare(`SELECT id, academic_year_id AS academicYearId, class_name AS className,
                        subject_name AS subjectName, is_active AS isActive
-                FROM classes WHERE academic_year_id = ? ORDER BY class_name, subject_name`)
+                FROM classes WHERE academic_year_id = ? ${includeInactive ? '' : 'AND is_active = 1'}
+                ORDER BY class_name, subject_name`)
       .all(academicYearId) as SchoolClass[]
   }
 
   createClass(input: { academicYearId: number; className: string; subjectName: string }): void {
     if (!input.className.trim() || !input.subjectName.trim()) throw new Error('Kelas dan mata pelajaran wajib diisi.')
+    const className = input.className.trim().toUpperCase()
+    const subjectName = input.subjectName.trim()
+    const existing = this.database.db
+      .prepare(`SELECT id, is_active AS isActive FROM classes
+                WHERE academic_year_id = ? AND class_name = ? AND subject_name = ?`)
+      .get(input.academicYearId, className, subjectName) as { id: number; isActive: number } | undefined
+    if (existing?.isActive) throw new Error('Kelas dan mata pelajaran tersebut sudah tersedia.')
+    if (existing) {
+      this.database.db.prepare('UPDATE classes SET is_active = 1 WHERE id = ?').run(existing.id)
+      return
+    }
     this.database.db
       .prepare(`INSERT INTO classes(academic_year_id, class_name, subject_name) VALUES (?, ?, ?)`)
-      .run(input.academicYearId, input.className.trim().toUpperCase(), input.subjectName.trim())
+      .run(input.academicYearId, className, subjectName)
+  }
+
+  updateClass(input: { id: number; academicYearId: number; className: string; subjectName: string }): void {
+    if (!input.className.trim() || !input.subjectName.trim()) throw new Error('Kelas dan mata pelajaran wajib diisi.')
+    const schoolClass = this.database.db
+      .prepare('SELECT id FROM classes WHERE id = ? AND academic_year_id = ?')
+      .get(input.id, input.academicYearId)
+    if (!schoolClass) throw new Error('Data kelas tidak ditemukan.')
+
+    const className = input.className.trim().toUpperCase()
+    const subjectName = input.subjectName.trim()
+    const duplicate = this.database.db
+      .prepare(`SELECT id FROM classes WHERE academic_year_id = ? AND class_name = ?
+                AND subject_name = ? AND id <> ?`)
+      .get(input.academicYearId, className, subjectName, input.id)
+    if (duplicate) throw new Error('Kelas dan mata pelajaran tersebut sudah tersedia.')
+
+    this.database.db
+      .prepare('UPDATE classes SET class_name = ?, subject_name = ? WHERE id = ? AND academic_year_id = ?')
+      .run(className, subjectName, input.id, input.academicYearId)
+  }
+
+  toggleClass(id: number): void {
+    const result = this.database.db
+      .prepare('UPDATE classes SET is_active = CASE is_active WHEN 1 THEN 0 ELSE 1 END WHERE id = ?')
+      .run(id)
+    if (!result.changes) throw new Error('Data kelas tidak ditemukan.')
   }
 
   listStudents(input: { academicYearId: number; classId?: number; search?: string }): Student[] {
     const params: unknown[] = [input.academicYearId]
-    let where = `se.academic_year_id = ? AND s.is_active = 1`
+    let where = `se.academic_year_id = ? AND se.status = 'AKTIF' AND s.is_active = 1 AND c.is_active = 1`
     if (input.classId) {
       where += ' AND se.class_id = ?'
       params.push(input.classId)
@@ -210,7 +295,8 @@ export class AppService {
         .prepare(`INSERT INTO students(nisn, nama_siswa, jenis_kelamin)
                   VALUES (?, ?, ?)
                   ON CONFLICT(nisn) DO UPDATE SET nama_siswa = excluded.nama_siswa,
-                    jenis_kelamin = excluded.jenis_kelamin, updated_at = CURRENT_TIMESTAMP`)
+                    jenis_kelamin = excluded.jenis_kelamin, is_active = 1,
+                    updated_at = CURRENT_TIMESTAMP`)
         .run(input.nisn.trim(), input.namaSiswa.trim(), input.jenisKelamin)
       const student = this.database.db.prepare('SELECT id FROM students WHERE nisn = ?').get(input.nisn.trim()) as { id: number }
       this.assignStudentToClassName(input.academicYearId, student.id, input.classId)
@@ -220,18 +306,31 @@ export class AppService {
 
   updateStudent(input: { id: number; academicYearId: number; classId: number; nisn: string; namaSiswa: string; jenisKelamin: 'L' | 'P' }): void {
     this.validateStudent(input)
+    const duplicate = this.database.db
+      .prepare('SELECT id FROM students WHERE nisn = ? AND id <> ?')
+      .get(input.nisn.trim(), input.id)
+    if (duplicate) throw new Error(`NISN ${input.nisn.trim()} sudah digunakan siswa lain.`)
     const transaction = this.database.db.transaction(() => {
       this.database.db
-        .prepare(`UPDATE students SET nisn = ?, nama_siswa = ?, jenis_kelamin = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+        .prepare(`UPDATE students SET nisn = ?, nama_siswa = ?, jenis_kelamin = ?, is_active = 1,
+                  updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
         .run(input.nisn.trim(), input.namaSiswa.trim(), input.jenisKelamin, input.id)
       this.assignStudentToClassName(input.academicYearId, input.id, input.classId)
     })
     transaction()
   }
 
+  deleteStudent(input: { id: number; academicYearId: number }): void {
+    const result = this.database.db
+      .prepare(`UPDATE student_enrollments SET status = 'NONAKTIF'
+                WHERE academic_year_id = ? AND student_id = ? AND status = 'AKTIF'`)
+      .run(input.academicYearId, input.id)
+    if (!result.changes) throw new Error('Data siswa aktif tidak ditemukan pada tahun ajaran ini.')
+  }
+
   private validateStudent(input: { nisn: string; namaSiswa: string; jenisKelamin: string }): void {
     if (!input.nisn.trim() || !input.namaSiswa.trim()) throw new Error('NISN dan nama siswa wajib diisi.')
-    if (!/^\d{5,20}$/.test(input.nisn.trim())) throw new Error('NISN harus berupa 5–20 digit.')
+    if (!/^\d{5,20}$/.test(input.nisn.trim())) throw new Error('NISN harus berupa 5-20 digit.')
     if (!['L', 'P'].includes(input.jenisKelamin)) throw new Error('Jenis kelamin harus L atau P.')
   }
 
@@ -259,13 +358,13 @@ export class AppService {
     return result.filePath
   }
 
-  async importStudents(input: { academicYearId: number; classId: number }): Promise<{ inserted: number; updated: number; skipped: number }> {
+  async importStudents(input: { academicYearId: number; classId: number }): Promise<StudentImportResult> {
     const result = await dialog.showOpenDialog({
       title: 'Pilih File Excel Siswa',
       properties: ['openFile'],
-      filters: [{ name: 'Excel', extensions: ['xlsx', 'xls'] }]
+      filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }]
     })
-    if (result.canceled || result.filePaths.length === 0) return { inserted: 0, updated: 0, skipped: 0 }
+    if (result.canceled || result.filePaths.length === 0) return { inserted: 0, updated: 0, skipped: 0, issues: [], canceled: true }
 
     const workbook = new ExcelJS.Workbook()
     await workbook.xlsx.readFile(result.filePaths[0])
@@ -283,7 +382,8 @@ export class AppService {
     }
 
     const rows: StudentImportRow[] = []
-    let skipped = 0
+    const issues: StudentImportIssue[] = []
+    const firstRowByNisn = new Map<string, number>()
     for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber++) {
       const row = sheet.getRow(rowNumber)
       const nisn = row.getCell(nisnColumn).text.trim()
@@ -291,11 +391,22 @@ export class AppService {
       const genderRaw = row.getCell(genderColumn).text.trim().toUpperCase()
       if (!nisn && !namaSiswa && !genderRaw) continue
       const jenisKelamin = genderRaw.startsWith('P') ? 'P' : genderRaw.startsWith('L') ? 'L' : null
-      if (!/^\d{5,20}$/.test(nisn) || !namaSiswa || !jenisKelamin) {
-        skipped += 1
+      let reason = ''
+      if (!/^\d{5,20}$/.test(nisn)) {
+        reason = 'NISN wajib berupa 5-20 digit. Gunakan format Text di Excel agar angka nol di depan tidak hilang.'
+      } else if (!namaSiswa) {
+        reason = 'Nama siswa kosong.'
+      } else if (!jenisKelamin) {
+        reason = 'Jenis kelamin harus L, P, Laki-laki, atau Perempuan.'
+      } else if (firstRowByNisn.has(nisn)) {
+        reason = `NISN duplikat di file, sudah digunakan pada baris ${firstRowByNisn.get(nisn)}.`
+      }
+      if (reason) {
+        issues.push({ rowNumber, nisn: nisn || '-', reason })
         continue
       }
-      rows.push({ nisn, namaSiswa, jenisKelamin })
+      firstRowByNisn.set(nisn, rowNumber)
+      rows.push({ nisn, namaSiswa, jenisKelamin: jenisKelamin as 'L' | 'P' })
     }
 
     let inserted = 0
@@ -305,7 +416,8 @@ export class AppService {
       const upsertStudent = this.database.db.prepare(`INSERT INTO students(nisn, nama_siswa, jenis_kelamin)
         VALUES (?, ?, ?)
         ON CONFLICT(nisn) DO UPDATE SET nama_siswa = excluded.nama_siswa,
-          jenis_kelamin = excluded.jenis_kelamin, updated_at = CURRENT_TIMESTAMP`)
+          jenis_kelamin = excluded.jenis_kelamin, is_active = 1,
+          updated_at = CURRENT_TIMESTAMP`)
       const findAfter = this.database.db.prepare('SELECT id FROM students WHERE nisn = ?')
       for (const row of rows) {
         const existing = find.get(row.nisn)
@@ -316,17 +428,19 @@ export class AppService {
       }
     })
     transaction()
-    return { inserted, updated, skipped }
+    return { inserted, updated, skipped: issues.length, issues, canceled: false }
   }
 
   private assignStudentToClassName(academicYearId: number, studentId: number, selectedClassId: number): void {
     const selected = this.database.db
-      .prepare(`SELECT class_name AS className FROM classes WHERE id = ? AND academic_year_id = ?`)
+      .prepare(`SELECT class_name AS className FROM classes
+                WHERE id = ? AND academic_year_id = ? AND is_active = 1`)
       .get(selectedClassId, academicYearId) as { className: string } | undefined
     if (!selected) throw new Error('Kelas tujuan tidak ditemukan.')
 
     this.database.db
-      .prepare('DELETE FROM student_enrollments WHERE academic_year_id = ? AND student_id = ?')
+      .prepare(`UPDATE student_enrollments SET status = 'NONAKTIF'
+                WHERE academic_year_id = ? AND student_id = ?`)
       .run(academicYearId, studentId)
     this.database.db
       .prepare(`INSERT INTO student_enrollments(academic_year_id, student_id, class_id)
