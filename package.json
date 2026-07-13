@@ -1,6 +1,6 @@
 {
   "name": "ejurnal-guru",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Aplikasi desktop E-Jurnal Guru untuk macOS Apple Silicon",
   "main": "./out/main/index.js",
   "author": "E-Jurnal Guru",
