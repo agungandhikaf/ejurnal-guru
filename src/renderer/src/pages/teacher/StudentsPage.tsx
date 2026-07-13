@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Download, FileSpreadsheet, Pencil, Plus, Search } from 'lucide-react'
-import type { LoginSession, Student } from '@shared/types'
+import type { LoginSession, Student, StudentImportResult } from '@shared/types'
 import { unwrap } from '../../lib/api'
 import Modal from '../../components/Modal'
 import Notice from '../../components/Notice'
@@ -52,9 +52,11 @@ export default function StudentsPage({ session }: { session: LoginSession }): JS
   const importExcel = async (): Promise<void> => {
     if (!classId) return
     try {
-      const result = unwrap<{ inserted: number; updated: number; skipped: number }>(await window.api.admin.importStudents({ academicYearId: session.academicYearId, classId }))
+      const result = unwrap<StudentImportResult>(await window.api.admin.importStudents({ academicYearId: session.academicYearId, classId }))
+      if (result.canceled) return
       await load()
-      setNotice({ message: `Import selesai: ${result.inserted} baru, ${result.updated} diperbarui, ${result.skipped} dilewati.`, type: 'success' })
+      const issueSummary = result.issues.slice(0, 5).map((issue) => `Baris ${issue.rowNumber}: ${issue.reason}`).join('\n')
+      setNotice({ message: `Import selesai: ${result.inserted} baru, ${result.updated} diperbarui, ${result.skipped} dilewati.${issueSummary ? `\n\n${issueSummary}` : ''}`, type: 'success' })
     } catch (e) {
       setNotice({ message: e instanceof Error ? e.message : 'Import gagal.', type: 'error' })
     }
