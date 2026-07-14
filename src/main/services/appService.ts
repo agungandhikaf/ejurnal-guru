@@ -344,7 +344,7 @@ export class AppService {
     const workbook = new ExcelJS.Workbook()
     const sheet = workbook.addWorksheet('Siswa')
     sheet.columns = [
-      { header: 'NISN', key: 'nisn', width: 18 },
+      { header: 'NISN', key: 'nisn', width: 18, style: { numFmt: '@' } },
       { header: 'Nama Siswa', key: 'namaSiswa', width: 34 },
       { header: 'Jenis Kelamin', key: 'jenisKelamin', width: 18 }
     ]
@@ -455,15 +455,21 @@ export class AppService {
     const totals = this.database.db
       .prepare(`SELECT
         (SELECT COUNT(*) FROM classes WHERE academic_year_id = ? AND is_active = 1) AS totalClasses,
-        (SELECT COUNT(DISTINCT student_id) FROM student_enrollments WHERE academic_year_id = ? AND status = 'AKTIF') AS totalStudents,
+        (SELECT COUNT(DISTINCT se.student_id)
+           FROM student_enrollments se
+           JOIN students s ON s.id = se.student_id AND s.is_active = 1
+          WHERE se.academic_year_id = ? AND se.status = 'AKTIF') AS totalStudents,
         (SELECT COUNT(*) FROM attendance_sessions WHERE semester_id = ? AND attendance_date = date('now','localtime')) AS attendanceToday,
         (SELECT COUNT(*) FROM teaching_journals WHERE semester_id = ?) AS totalJournals`)
       .get(input.academicYearId, input.academicYearId, input.semesterId, input.semesterId) as Omit<DashboardData, 'classes'>
     const classes = this.database.db
       .prepare(`SELECT c.id, c.class_name AS className, c.subject_name AS subjectName,
-                       COUNT(DISTINCT se.student_id) AS studentCount
+                       COUNT(DISTINCT s.id) AS studentCount
                 FROM classes c
-                LEFT JOIN student_enrollments se ON se.class_id = c.id AND se.academic_year_id = c.academic_year_id
+                LEFT JOIN student_enrollments se ON se.class_id = c.id
+                  AND se.academic_year_id = c.academic_year_id
+                  AND se.status = 'AKTIF'
+                LEFT JOIN students s ON s.id = se.student_id AND s.is_active = 1
                 WHERE c.academic_year_id = ? AND c.is_active = 1
                 GROUP BY c.id ORDER BY c.class_name, c.subject_name`)
       .all(input.academicYearId) as DashboardData['classes']
