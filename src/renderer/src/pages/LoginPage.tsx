@@ -223,7 +223,6 @@ export default function LoginPage({ onLogin }: Props): JSX.Element {
             {loading ? 'Memeriksa...' : 'Masuk'}
           </button>
 
-          {role === 'ADMIN' && <p className="mt-4 text-center text-xs text-slate-400">Akun awal: root / 0102</p>}
         </form>
       </section>
     </div>
