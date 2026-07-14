@@ -4,6 +4,7 @@ import {
   Star, Users, BookOpenText, LogOut, GraduationCap
 } from 'lucide-react'
 import type { LoginSession } from '@shared/types'
+import AppCopyright from '../../components/AppCopyright'
 import DashboardPage from './DashboardPage'
 import AttendancePage from './AttendancePage'
 import DailyAttendancePage from './DailyAttendancePage'
@@ -69,7 +70,7 @@ export default function TeacherLayout({ session, onLogout }: Props): JSX.Element
           <button onClick={onLogout} className="mt-3 flex w-full items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-400 hover:bg-rose-500/10 hover:text-rose-300"><LogOut size={16} /> Keluar</button>
         </div>
       </aside>
-      <main className="app-main"><div className="page-host">{content}</div></main>
+      <main className="app-main"><div className="page-host">{content}</div><AppCopyright /></main>
     </div>
   )
 }

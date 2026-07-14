@@ -3,6 +3,8 @@ import { BookOpenCheck, CalendarDays, LockKeyhole, UserRound } from 'lucide-reac
 import type { AcademicYear, LoginSession, Semester } from '@shared/types'
 import { getSuggestedAcademicContext } from '@shared/academicYear'
 import { unwrap } from '../lib/api'
+import AppCopyright from '../components/AppCopyright'
+import CurrentDate from '../components/CurrentDate'
 import Select from '../components/Select'
 
 interface Props {
@@ -104,13 +106,18 @@ export default function LoginPage({ onLogin }: Props): JSX.Element {
           <h2 className="mt-5 text-4xl font-bold leading-tight">Administrasi mengajar yang rapi tanpa bergantung pada internet.</h2>
           <p className="mt-4 text-base leading-7 text-slate-300">Data disimpan lokal, dipisahkan berdasarkan tahun ajaran dan semester, serta dapat dicadangkan kapan pun.</p>
         </div>
-        <p className="relative z-10 text-xs text-slate-500">© 2026 E-Jurnal Guru</p>
+        <AppCopyright className="relative z-10 text-xs text-slate-500" />
       </section>
 
       <section className="flex flex-1 items-center justify-center p-12">
         <form onSubmit={submit} className="card w-full max-w-lg p-8">
-          <h2 className="text-2xl font-bold text-slate-900">Masuk ke aplikasi</h2>
-          <p className="mt-2 text-sm text-slate-500">Pilih jenis akses yang sesuai.</p>
+          <div className="flex items-start justify-between gap-5">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">Masuk ke aplikasi</h2>
+              <p className="mt-2 text-sm text-slate-500">Pilih jenis akses yang sesuai.</p>
+            </div>
+            <CurrentDate variant="surface" />
+          </div>
 
           <div className="mt-6 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1.5">
             {(['GURU', 'ADMIN'] as const).map((item) => (
