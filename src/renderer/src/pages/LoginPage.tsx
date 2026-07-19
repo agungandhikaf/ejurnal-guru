@@ -88,29 +88,29 @@ export default function LoginPage({ onLogin }: Props): JSX.Element {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-100">
-      <section className="relative flex w-[48%] flex-col justify-between overflow-hidden bg-[#111625] p-14 text-white">
-        <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-indigo-600/30 blur-3xl" />
-        <div className="absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-fuchsia-600/20 blur-3xl" />
+    <div className="flex min-h-screen bg-[#FBF4EA]">
+      <section className="relative flex w-[48%] flex-col justify-between overflow-hidden bg-[#C43670] p-14 text-white">
+        <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-[#F283AE]/35 blur-3xl" />
+        <div className="absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-[#FFD592]/25 blur-3xl" />
         <div className="relative z-10">
           <div className="inline-flex items-center gap-3 rounded-2xl bg-white/10 p-3 backdrop-blur">
-            <div className="rounded-xl bg-indigo-600 p-3"><BookOpenCheck size={28} /></div>
+            <div className="rounded-xl bg-[#FFD592] p-3 text-[#701D42]"><BookOpenCheck size={28} /></div>
             <div>
               <h1 className="text-xl font-bold">E-Jurnal Guru</h1>
-              <p className="text-xs text-slate-300">Presensi, nilai, siswa, dan jurnal dalam satu aplikasi.</p>
+              <p className="text-xs text-[#FBF4EA]">Presensi, nilai, siswa, dan jurnal dalam satu aplikasi.</p>
             </div>
           </div>
         </div>
         <div className="relative z-10 max-w-xl">
-          <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-semibold text-indigo-200">Desktop Offline • macOS Apple Silicon</span>
+          <span className="rounded-full bg-[#FBDAE5]/20 px-3 py-1 text-xs font-semibold text-[#FBF4EA]">Desktop Offline • macOS Apple Silicon</span>
           <h2 className="mt-5 text-4xl font-bold leading-tight">Administrasi mengajar yang rapi tanpa bergantung pada internet.</h2>
-          <p className="mt-4 text-base leading-7 text-slate-300">Data disimpan lokal, dipisahkan berdasarkan tahun ajaran dan semester, serta dapat dicadangkan kapan pun.</p>
+          <p className="mt-4 text-base leading-7 text-[#FBF4EA]">Data disimpan lokal, dipisahkan berdasarkan tahun ajaran dan semester, serta dapat dicadangkan kapan pun.</p>
         </div>
         <AppCopyright className="relative z-10 text-xs text-slate-500" />
       </section>
 
       <section className="flex flex-1 items-center justify-center p-12">
-        <form onSubmit={submit} className="card w-full max-w-lg p-8">
+        <form onSubmit={submit} className="w-full max-w-lg rounded-2xl border border-[#C43670]/10 bg-white p-8 shadow-[0_18px_50px_rgba(196,54,112,0.12)]">
           <div className="flex items-start justify-between gap-5">
             <div>
               <h2 className="text-2xl font-bold text-slate-900">Masuk ke aplikasi</h2>
@@ -119,13 +119,13 @@ export default function LoginPage({ onLogin }: Props): JSX.Element {
             <CurrentDate variant="surface" />
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1.5">
+          <div className="mt-6 grid grid-cols-2 gap-2 rounded-xl bg-[#FBDAE5] p-1.5">
             {(['GURU', 'ADMIN'] as const).map((item) => (
               <button
                 key={item}
                 type="button"
                 onClick={() => { setRole(item); setError('') }}
-                className={`rounded-lg px-4 py-2.5 text-sm font-semibold transition ${role === item ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                className={`rounded-lg px-4 py-2.5 text-sm font-semibold transition ${role === item ? 'bg-[#C43670] text-white shadow-sm' : 'text-[#6B5B58] hover:bg-white/70 hover:text-[#C43670]'}`}
               >
                 {item === 'GURU' ? 'Login Guru' : 'Login Admin'}
               </button>
@@ -167,7 +167,7 @@ export default function LoginPage({ onLogin }: Props): JSX.Element {
                     setRememberUsername(checked)
                     if (!checked) window.localStorage.removeItem(usernameStorageKey(role))
                   }}
-                  className="h-4 w-4 accent-indigo-600"
+                  className="h-4 w-4 accent-[#C43670]"
                 />
                 Ingat username
               </span>
@@ -213,7 +213,7 @@ export default function LoginPage({ onLogin }: Props): JSX.Element {
           </div>
 
           {role === 'GURU' && years.length > 0 && (
-            <div className="mt-5 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
+            <div className="mt-5 rounded-xl border border-[#C43670]/20 bg-[#FBDAE5]/55 px-4 py-3 text-xs text-[#C43670]">
               Pilihan awal mengikuti tanggal perangkat: <strong>{getSuggestedAcademicContext().label}</strong> • Semester <strong>{getSuggestedAcademicContext().semesterName === 'GANJIL' ? 'Ganjil' : 'Genap'}</strong>. Guru tetap dapat memilih konteks lain.
             </div>
           )}
@@ -226,7 +226,7 @@ export default function LoginPage({ onLogin }: Props): JSX.Element {
             </div>
           )}
 
-          <button className="btn-primary mt-6 w-full py-3" disabled={loading || (role === 'GURU' && (!yearId || !semesterId))}>
+          <button className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-[#C43670] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#A52D60] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-55" disabled={loading || (role === 'GURU' && (!yearId || !semesterId))}>
             {loading ? 'Memeriksa...' : 'Masuk'}
           </button>
 

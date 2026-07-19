@@ -40,7 +40,7 @@ export default function TeacherLayout({ session, onLogout }: Props): JSX.Element
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      <aside className="flex w-72 shrink-0 flex-col justify-between bg-[#111625] text-slate-400">
+      <aside className="flex w-72 shrink-0 flex-col justify-between bg-[#87244F] text-slate-300">
         <div>
           <div className="flex items-center gap-3 border-b border-slate-800 px-5 pb-5 pt-10">
             <div className="rounded-xl bg-indigo-600 p-3 text-white shadow-lg"><GraduationCap size={22} /></div>
