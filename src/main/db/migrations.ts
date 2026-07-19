@@ -244,5 +244,33 @@ export const migrations: Migration[] = [
       DROP TABLE attendance_records;
       ALTER TABLE attendance_records_new RENAME TO attendance_records;
     `
+  },
+  {
+    version: 5,
+    name: 'add_teaching_schedules',
+    sql: `
+      CREATE TABLE teaching_schedules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        semester_id INTEGER NOT NULL,
+        day_of_week INTEGER NOT NULL CHECK(day_of_week BETWEEN 1 AND 5),
+        class_id INTEGER NOT NULL,
+        lesson_start INTEGER NOT NULL CHECK(lesson_start BETWEEN 1 AND 10),
+        lesson_end INTEGER NOT NULL CHECK(lesson_end BETWEEN lesson_start AND 10),
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+        FOREIGN KEY (semester_id) REFERENCES semesters(id) ON DELETE CASCADE,
+        FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE RESTRICT
+      );
+
+      ALTER TABLE attendance_sessions ADD COLUMN teaching_schedule_id INTEGER REFERENCES teaching_schedules(id) ON DELETE SET NULL;
+      ALTER TABLE teaching_journals ADD COLUMN teaching_schedule_id INTEGER REFERENCES teaching_schedules(id) ON DELETE SET NULL;
+
+      CREATE INDEX idx_schedule_teacher_semester_day ON teaching_schedules(user_id, semester_id, day_of_week, is_active);
+      CREATE INDEX idx_attendance_schedule ON attendance_sessions(teaching_schedule_id);
+      CREATE INDEX idx_journal_schedule ON teaching_journals(teaching_schedule_id);
+    `
   }
 ]

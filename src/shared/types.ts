@@ -98,6 +98,7 @@ export interface GradeSheetRow extends Student {
 
 export interface TeachingJournal {
   id: number
+  scheduleId?: number
   semesterId: number
   classId: number
   className: string
@@ -107,6 +108,19 @@ export interface TeachingJournal {
   lessonEnd: number
   learningMaterial: string
   createdAt: string
+}
+
+export interface TeachingSchedule {
+  id: number
+  userId: number
+  semesterId: number
+  dayOfWeek: number
+  classId: number
+  className: string
+  subjectName: string
+  lessonStart: number
+  lessonEnd: number
+  isActive: number
 }
 
 export interface DashboardData {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
-import type { LoginSession, TeachingJournal } from '@shared/types'
+import type { LoginSession, TeachingJournal, TeachingSchedule } from '@shared/types'
 import { formatDate, today, unwrap } from '../../lib/api'
 import DatePicker from '../../components/DatePicker'
 import Modal from '../../components/Modal'
@@ -10,6 +10,7 @@ import { useClasses } from './useClasses'
 
 interface JournalForm {
   id: number
+  scheduleId: number | ''
   classId: number | ''
   journalDate: string
   lessonStart: number
@@ -17,12 +18,12 @@ interface JournalForm {
   learningMaterial: string
 }
 
-const emptyForm = (): JournalForm => ({ id: 0, classId: '', journalDate: today(), lessonStart: 1, lessonEnd: 2, learningMaterial: '' })
-const lessonOptions = Array.from({ length: 10 }, (_, index) => ({ value: index + 1, label: `Jam ke-${index + 1}` }))
+const emptyForm = (): JournalForm => ({ id: 0, scheduleId: '', classId: '', journalDate: today(), lessonStart: 1, lessonEnd: 1, learningMaterial: '' })
 
 export default function JournalsPage({ session }: { session: LoginSession }): JSX.Element {
   const { classes } = useClasses(session.academicYearId)
   const [rows, setRows] = useState<TeachingJournal[]>([])
+  const [schedules, setSchedules] = useState<TeachingSchedule[]>([])
   const [classFilter, setClassFilter] = useState<number | ''>('')
   const [dateFilter, setDateFilter] = useState('')
   const [search, setSearch] = useState('')
@@ -34,6 +35,7 @@ export default function JournalsPage({ session }: { session: LoginSession }): JS
     try {
       setRows(unwrap<TeachingJournal[]>(await window.api.journals.list({
         semesterId: session.semesterId,
+        userId: session.userId,
         classId: classFilter || undefined,
         search,
         date: dateFilter || undefined
@@ -50,15 +52,24 @@ export default function JournalsPage({ session }: { session: LoginSession }): JS
 
   const openCreate = (): void => {
     const next = emptyForm()
-    next.classId = classes[0]?.id ?? ''
     setForm(next)
     setOpen(true)
   }
 
+  useEffect(() => {
+    if (!open) return
+    window.api.schedules.byDate({ userId: session.userId, semesterId: session.semesterId, date: form.journalDate }).then((response) => {
+      const data = unwrap<TeachingSchedule[]>(response); setSchedules(data)
+      if (!data.some((item) => item.id === form.scheduleId)) setForm((current) => ({ ...current, scheduleId: data[0]?.id ?? '' }))
+    }).catch((e) => setNotice({ message: e instanceof Error ? e.message : 'Gagal memuat jadwal.', type: 'error' }))
+  }, [open, form.journalDate, session.userId, session.semesterId])
+
   const save = async (): Promise<void> => {
     try {
-      if (!form.classId) throw new Error('Pilih kelas terlebih dahulu.')
-      const payload = { ...form, userId: session.userId, semesterId: session.semesterId, classId: form.classId }
+      if (!form.scheduleId) throw new Error('Tidak ada jadwal yang dapat dipilih.')
+      const selected = schedules.find((item) => item.id === form.scheduleId)
+      if (!selected) throw new Error('Jadwal tidak tersedia pada tanggal ini.')
+      const payload = { ...form, userId: session.userId, semesterId: session.semesterId, scheduleId: form.scheduleId, classId: selected.classId, lessonStart: selected.lessonStart, lessonEnd: selected.lessonEnd }
       if (form.id) unwrap(await window.api.journals.update(payload))
       else unwrap(await window.api.journals.create(payload))
       setOpen(false)
@@ -72,7 +83,7 @@ export default function JournalsPage({ session }: { session: LoginSession }): JS
   const remove = async (id: number): Promise<void> => {
     if (!confirm('Hapus jurnal ini?')) return
     try {
-      unwrap(await window.api.journals.delete(id))
+      unwrap(await window.api.journals.delete({ id, userId: session.userId }))
       await load()
       setNotice({ message: 'Jurnal dihapus.', type: 'success' })
     } catch (e) {
@@ -117,7 +128,7 @@ export default function JournalsPage({ session }: { session: LoginSession }): JS
                 <td><span className="font-semibold">{row.className}</span><br /><span className="text-xs text-slate-400">{row.subjectName}</span></td>
                 <td>Jam {row.lessonStart}{row.lessonEnd !== row.lessonStart ? `–${row.lessonEnd}` : ''}</td>
                 <td className="max-w-xl whitespace-pre-wrap">{row.learningMaterial}</td>
-                <td className="text-right"><div className="flex justify-end gap-3"><button className="text-indigo-600" onClick={() => { setForm({ id: row.id, classId: row.classId, journalDate: row.journalDate, lessonStart: row.lessonStart, lessonEnd: row.lessonEnd, learningMaterial: row.learningMaterial }); setOpen(true) }}><Pencil size={16} /></button><button className="text-rose-500" onClick={() => remove(row.id)}><Trash2 size={16} /></button></div></td>
+                <td className="text-right"><div className="flex justify-end gap-3"><button className="text-indigo-600" onClick={() => { setForm({ id: row.id, scheduleId: row.scheduleId ?? '', classId: row.classId, journalDate: row.journalDate, lessonStart: row.lessonStart, lessonEnd: row.lessonEnd, learningMaterial: row.learningMaterial }); setOpen(true) }}><Pencil size={16} /></button><button className="text-rose-500" onClick={() => remove(row.id)}><Trash2 size={16} /></button></div></td>
               </tr>
             ))}</tbody>
           </table>
@@ -132,13 +143,10 @@ export default function JournalsPage({ session }: { session: LoginSession }): JS
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="label">Tanggal</label><DatePicker value={form.journalDate} onChange={(value) => setForm({ ...form, journalDate: value })} /></div>
-            <div><label className="label">Kelas</label><Select value={form.classId} placeholder="Pilih kelas" options={classes.map((item) => ({ value: item.id, label: `${item.subjectName} - ${item.className}` }))} onChange={(value) => setForm({ ...form, classId: Number(value) })} /></div>
+            <div><label className="label">Tanggal</label><DatePicker value={form.journalDate} onChange={(value) => setForm({ ...form, journalDate: value, scheduleId: '' })} /></div>
+            <div><label className="label">Jadwal Mengajar</label><Select value={form.scheduleId} placeholder="Tidak ada jadwal pada hari ini" options={schedules.map((item) => ({ value: item.id, label: `Jam ke-${item.lessonStart}${item.lessonEnd !== item.lessonStart ? `–${item.lessonEnd}` : ''} · ${item.className} · ${item.subjectName}` }))} onChange={(value) => setForm({ ...form, scheduleId: Number(value) })} /></div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="label">Jam Mulai</label><Select value={form.lessonStart} options={lessonOptions} onChange={(value) => { const next = Number(value); setForm({ ...form, lessonStart: next, lessonEnd: Math.max(form.lessonEnd, next) }) }} /></div>
-            <div><label className="label">Jam Selesai</label><Select value={form.lessonEnd} options={lessonOptions.filter((item) => Number(item.value) >= form.lessonStart)} onChange={(value) => setForm({ ...form, lessonEnd: Number(value) })} /></div>
-          </div>
+          {!schedules.length && <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-700">Tidak ada jadwal mengajar pada tanggal ini.</div>}
           <div><label className="label">Materi Pembelajaran</label><textarea className="field min-h-36 resize-y" value={form.learningMaterial} onChange={(e) => setForm({ ...form, learningMaterial: e.target.value })} placeholder="Tuliskan materi, aktivitas, atau catatan pembelajaran..." /></div>
         </div>
       </Modal>

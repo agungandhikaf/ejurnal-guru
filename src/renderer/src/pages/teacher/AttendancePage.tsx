@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Save, UserCheck } from 'lucide-react'
-import type { AttendanceRow, AttendanceStatus, LoginSession } from '@shared/types'
+import type { AttendanceRow, AttendanceStatus, LoginSession, TeachingSchedule } from '@shared/types'
 import { today, unwrap } from '../../lib/api'
 import DatePicker from '../../components/DatePicker'
 import Notice from '../../components/Notice'
 import Select from '../../components/Select'
-import { useClasses } from './useClasses'
 
 const statuses: Array<{ value: AttendanceStatus; label: string; className: string }> = [
   { value: 'H', label: 'Hadir', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
@@ -15,31 +14,34 @@ const statuses: Array<{ value: AttendanceStatus; label: string; className: strin
   { value: 'A', label: 'Alpa', className: 'border-rose-200 bg-rose-50 text-rose-700' }
 ]
 
-const lessonOptions = Array.from({ length: 10 }, (_, index) => ({ value: index + 1, label: `Jam ke-${index + 1}` }))
-
 export default function AttendancePage({ session }: { session: LoginSession }): JSX.Element {
-  const { classes, error: classError } = useClasses(session.academicYearId)
-  const [classId, setClassId] = useState<number | ''>('')
   const [date, setDate] = useState(today())
-  const [lessonStart, setLessonStart] = useState(1)
-  const [lessonEnd, setLessonEnd] = useState(2)
+  const [schedules, setSchedules] = useState<TeachingSchedule[]>([])
+  const [scheduleId, setScheduleId] = useState<number | ''>('')
   const [rows, setRows] = useState<AttendanceRow[]>([])
   const [loading, setLoading] = useState(false)
   const [notice, setNotice] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
-  useEffect(() => { if (!classId && classes[0]) setClassId(classes[0].id) }, [classes, classId])
+  const schedule = schedules.find((item) => item.id === scheduleId)
+  useEffect(() => {
+    window.api.schedules.byDate({ userId: session.userId, semesterId: session.semesterId, date }).then((response) => {
+      const data = unwrap<TeachingSchedule[]>(response); setSchedules(data); setScheduleId(data[0]?.id ?? ''); if (!data.length) setRows([])
+    }).catch((e) => setNotice({ message: e instanceof Error ? e.message : 'Gagal memuat jadwal.', type: 'error' }))
+  }, [date, session.userId, session.semesterId])
 
   const load = async (): Promise<void> => {
-    if (!classId) return
+    if (!schedule) return
     setLoading(true)
     try {
       const data = unwrap<AttendanceRow[]>(await window.api.attendance.form({
         academicYearId: session.academicYearId,
         semesterId: session.semesterId,
-        classId,
+        userId: session.userId,
+        scheduleId: schedule.id,
+        classId: schedule.classId,
         date,
-        lessonStart,
-        lessonEnd
+        lessonStart: schedule.lessonStart,
+        lessonEnd: schedule.lessonEnd
       }))
       setRows(data)
     } catch (e) {
@@ -49,7 +51,7 @@ export default function AttendancePage({ session }: { session: LoginSession }): 
     }
   }
 
-  useEffect(() => { void load() }, [classId, date, lessonStart, lessonEnd])
+  useEffect(() => { void load() }, [scheduleId, date])
 
   const summary = useMemo(
     () => statuses.map((status) => ({ ...status, count: rows.filter((row) => row.status === status.value).length })),
@@ -61,16 +63,17 @@ export default function AttendancePage({ session }: { session: LoginSession }): 
   }
 
   const save = async (): Promise<void> => {
-    if (!classId) return
+    if (!schedule) return
     try {
       unwrap(await window.api.attendance.save({
         userId: session.userId,
         academicYearId: session.academicYearId,
         semesterId: session.semesterId,
-        classId,
+        scheduleId: schedule.id,
+        classId: schedule.classId,
         date,
-        lessonStart,
-        lessonEnd,
+        lessonStart: schedule.lessonStart,
+        lessonEnd: schedule.lessonEnd,
         rows: rows.map((row) => ({ studentId: row.id, status: row.status, note: row.note }))
       }))
       setNotice({ message: 'Presensi berhasil disimpan.', type: 'success' })
@@ -86,44 +89,24 @@ export default function AttendancePage({ session }: { session: LoginSession }): 
         <h2 className="text-2xl font-bold text-slate-900">Input Presensi</h2>
         <p className="mt-1 text-sm text-slate-500">Semua siswa otomatis berstatus hadir. Ubah hanya siswa yang Sakit, Izin, Dispen, atau Alpa.</p>
       </div>
-      {classError && <div className="rounded-xl bg-rose-50 p-4 text-sm text-rose-700">{classError}</div>}
-
       <div className="card p-6">
-        <div className="grid grid-cols-4 gap-4">
-          <div>
-            <label className="label">Kelas & Mata Pelajaran</label>
-            <Select
-              value={classId}
-              placeholder="Pilih kelas"
-              options={classes.map((item) => ({ value: item.id, label: `${item.subjectName} - ${item.className}` }))}
-              onChange={(value) => setClassId(Number(value))}
-            />
-          </div>
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="label">Tanggal</label>
             <DatePicker value={date} onChange={setDate} />
           </div>
           <div>
-            <label className="label">Jam Mulai</label>
+            <label className="label">Jadwal Mengajar</label>
             <Select
-              value={lessonStart}
-              options={lessonOptions}
-              onChange={(value) => {
-                const next = Number(value)
-                setLessonStart(next)
-                if (lessonEnd < next) setLessonEnd(next)
-              }}
-            />
-          </div>
-          <div>
-            <label className="label">Jam Selesai</label>
-            <Select
-              value={lessonEnd}
-              options={lessonOptions.filter((option) => Number(option.value) >= lessonStart)}
-              onChange={(value) => setLessonEnd(Number(value))}
+              value={scheduleId}
+              placeholder="Tidak ada jadwal pada hari ini"
+              options={schedules.map((item) => ({ value: item.id, label: `Jam ke-${item.lessonStart}${item.lessonEnd !== item.lessonStart ? `–${item.lessonEnd}` : ''} · ${item.className} · ${item.subjectName}` }))}
+              onChange={(value) => setScheduleId(Number(value))}
             />
           </div>
         </div>
+
+        {!schedule && <div className="mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-700">Tidak ada jadwal mengajar pada tanggal ini. Tambahkan jadwal melalui menu Jadwal Mengajar.</div>}
 
         <div className="mt-5 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
           <div className="flex flex-wrap gap-3">{summary.map((item) => <span key={item.value} className={`badge border ${item.className}`}>{item.label}: {item.count}</span>)}</div>
@@ -147,7 +130,7 @@ export default function AttendancePage({ session }: { session: LoginSession }): 
           </table>
         </div>
 
-        <div className="mt-5 flex justify-end"><button className="btn-primary" onClick={save} disabled={!classId || rows.length === 0}><Save size={16} /> Simpan Presensi</button></div>
+        <div className="mt-5 flex justify-end"><button className="btn-primary" onClick={save} disabled={!schedule || rows.length === 0}><Save size={16} /> Simpan Presensi</button></div>
       </div>
     </div>
   )

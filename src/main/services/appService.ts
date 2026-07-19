@@ -22,7 +22,8 @@ import type {
   StudentImportResult,
   SummativeGroup,
   Teacher,
-  TeachingJournal
+  TeachingJournal,
+  TeachingSchedule
 } from '../../shared/types'
 
 interface LoginInput {
@@ -451,6 +452,79 @@ export class AppService {
       .run(academicYearId, studentId, academicYearId, selected.className)
   }
 
+  listSchedules(input: { userId: number; semesterId: number }): TeachingSchedule[] {
+    return this.database.db.prepare(`SELECT ts.id, ts.user_id AS userId, ts.semester_id AS semesterId,
+      ts.day_of_week AS dayOfWeek, ts.class_id AS classId, c.class_name AS className,
+      c.subject_name AS subjectName, ts.lesson_start AS lessonStart, ts.lesson_end AS lessonEnd,
+      ts.is_active AS isActive
+      FROM teaching_schedules ts JOIN classes c ON c.id = ts.class_id
+      WHERE ts.user_id = ? AND ts.semester_id = ? AND ts.is_active = 1
+      ORDER BY ts.day_of_week, ts.lesson_start, ts.lesson_end, c.class_name`)
+      .all(input.userId, input.semesterId) as TeachingSchedule[]
+  }
+
+  listSchedulesByDate(input: { userId: number; semesterId: number; date: string }): TeachingSchedule[] {
+    const day = this.dayOfWeek(input.date)
+    if (day < 1 || day > 5) return []
+    return this.listSchedules(input).filter((row) => row.dayOfWeek === day)
+  }
+
+  createSchedule(input: { userId: number; semesterId: number; dayOfWeek: number; classId: number; lessonStart: number; lessonEnd: number }): void {
+    this.validateSchedule(input)
+    this.database.db.prepare(`INSERT INTO teaching_schedules(user_id, semester_id, day_of_week, class_id, lesson_start, lesson_end)
+      VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(input.userId, input.semesterId, input.dayOfWeek, input.classId, input.lessonStart, input.lessonEnd)
+  }
+
+  updateSchedule(input: { id: number; userId: number; semesterId: number; dayOfWeek: number; classId: number; lessonStart: number; lessonEnd: number }): void {
+    this.validateSchedule(input)
+    const result = this.database.db.prepare(`UPDATE teaching_schedules SET day_of_week = ?, class_id = ?, lesson_start = ?, lesson_end = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ? AND semester_id = ? AND is_active = 1`)
+      .run(input.dayOfWeek, input.classId, input.lessonStart, input.lessonEnd, input.id, input.userId, input.semesterId)
+    if (!result.changes) throw new Error('Jadwal tidak ditemukan.')
+  }
+
+  deleteSchedule(input: { id: number; userId: number; semesterId: number }): void {
+    this.bulkDeleteSchedules({ ids: [input.id], userId: input.userId, semesterId: input.semesterId })
+  }
+
+  bulkDeleteSchedules(input: { ids: number[]; userId: number; semesterId: number }): void {
+    const ids = [...new Set(input.ids.map(Number).filter(Number.isInteger))]
+    if (!ids.length) throw new Error('Pilih jadwal yang akan dihapus.')
+    const placeholders = ids.map(() => '?').join(',')
+    this.database.db.prepare(`UPDATE teaching_schedules SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = ? AND semester_id = ? AND id IN (${placeholders})`)
+      .run(input.userId, input.semesterId, ...ids)
+  }
+
+  private validateSchedule(input: { id?: number; userId: number; semesterId: number; dayOfWeek: number; classId: number; lessonStart: number; lessonEnd: number }): void {
+    if (!Number.isInteger(input.dayOfWeek) || input.dayOfWeek < 1 || input.dayOfWeek > 5) throw new Error('Hari mengajar tidak valid.')
+    if (!Number.isInteger(input.lessonStart) || !Number.isInteger(input.lessonEnd) || input.lessonStart < 1 || input.lessonEnd > 10 || input.lessonEnd < input.lessonStart) {
+      throw new Error('Rentang jam pelajaran tidak valid.')
+    }
+    const classRow = this.database.db.prepare(`SELECT c.id FROM classes c JOIN semesters s ON s.academic_year_id = c.academic_year_id
+      WHERE c.id = ? AND s.id = ? AND c.is_active = 1`).get(input.classId, input.semesterId)
+    if (!classRow) throw new Error('Kelas tidak tersedia pada semester ini.')
+    const overlap = this.database.db.prepare(`SELECT id FROM teaching_schedules
+      WHERE user_id = ? AND semester_id = ? AND day_of_week = ? AND is_active = 1
+        AND lesson_start <= ? AND lesson_end >= ? AND id <> ?`)
+      .get(input.userId, input.semesterId, input.dayOfWeek, input.lessonEnd, input.lessonStart, input.id ?? 0)
+    if (overlap) throw new Error('Jam mengajar bertabrakan dengan jadwal lain pada hari yang sama.')
+  }
+
+  private dayOfWeek(date: string): number {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Tanggal tidak valid.')
+    const value = new Date(`${date}T00:00:00`)
+    if (Number.isNaN(value.getTime())) throw new Error('Tanggal tidak valid.')
+    return value.getDay()
+  }
+
+  private getOwnedSchedule(input: { scheduleId: number; userId: number; semesterId: number; date: string }): TeachingSchedule {
+    const schedule = this.listSchedulesByDate(input).find((row) => row.id === input.scheduleId)
+    if (!schedule) throw new Error('Jadwal tidak tersedia untuk guru dan tanggal yang dipilih.')
+    return schedule
+  }
+
   getDashboard(input: { academicYearId: number; semesterId: number }): DashboardData {
     const totals = this.database.db
       .prepare(`SELECT
@@ -477,6 +551,8 @@ export class AppService {
   }
 
   getAttendanceForm(input: {
+    userId: number
+    scheduleId: number
     academicYearId: number
     semesterId: number
     classId: number
@@ -484,6 +560,10 @@ export class AppService {
     lessonStart: number
     lessonEnd: number
   }): AttendanceRow[] {
+    const schedule = this.getOwnedSchedule(input)
+    input.classId = schedule.classId
+    input.lessonStart = schedule.lessonStart
+    input.lessonEnd = schedule.lessonEnd
     const rows = this.database.db
       .prepare(`SELECT s.id, s.nisn, s.nama_siswa AS namaSiswa, s.jenis_kelamin AS jenisKelamin,
                        c.id AS classId, c.class_name AS className,
@@ -501,6 +581,7 @@ export class AppService {
   }
 
   saveAttendance(input: {
+    scheduleId: number
     userId: number
     academicYearId: number
     semesterId: number
@@ -510,14 +591,18 @@ export class AppService {
     lessonEnd: number
     rows: Array<{ studentId: number; status: string; note: string }>
   }): void {
+    const schedule = this.getOwnedSchedule(input)
+    input.classId = schedule.classId
+    input.lessonStart = schedule.lessonStart
+    input.lessonEnd = schedule.lessonEnd
     const validStatuses = new Set(['H', 'S', 'I', 'D', 'A'])
     const transaction = this.database.db.transaction(() => {
       this.database.db
-        .prepare(`INSERT INTO attendance_sessions(semester_id, class_id, attendance_date, lesson_start, lesson_end, created_by)
-                  VALUES (?, ?, ?, ?, ?, ?)
+        .prepare(`INSERT INTO attendance_sessions(semester_id, class_id, attendance_date, lesson_start, lesson_end, created_by, teaching_schedule_id)
+                  VALUES (?, ?, ?, ?, ?, ?, ?)
                   ON CONFLICT(semester_id, class_id, attendance_date, lesson_start, lesson_end)
-                  DO UPDATE SET updated_at = CURRENT_TIMESTAMP`)
-        .run(input.semesterId, input.classId, input.date, input.lessonStart, input.lessonEnd, input.userId)
+                  DO UPDATE SET teaching_schedule_id = excluded.teaching_schedule_id, updated_at = CURRENT_TIMESTAMP`)
+        .run(input.semesterId, input.classId, input.date, input.lessonStart, input.lessonEnd, input.userId, input.scheduleId)
       const session = this.database.db
         .prepare(`SELECT id FROM attendance_sessions WHERE semester_id = ? AND class_id = ?
                   AND attendance_date = ? AND lesson_start = ? AND lesson_end = ?`)
@@ -539,16 +624,19 @@ export class AppService {
     transaction()
   }
 
-  getDailyAttendance(input: { semesterId: number; academicYearId: number; date: string }): Array<Record<string, unknown>> {
+  getDailyAttendance(input: { userId: number; semesterId: number; academicYearId: number; date: string }): Array<Record<string, unknown>> {
+    const day = this.dayOfWeek(input.date)
+    if (day < 1 || day > 5) return []
     return this.database.db
-      .prepare(`SELECT c.id AS classId, c.class_name AS className, c.subject_name AS subjectName,
-                       ats.id AS sessionId, ats.lesson_start AS lessonStart, ats.lesson_end AS lessonEnd,
+      .prepare(`SELECT ts.id AS scheduleId, c.id AS classId, c.class_name AS className, c.subject_name AS subjectName,
+                       ats.id AS sessionId, ts.lesson_start AS lessonStart, ts.lesson_end AS lessonEnd,
                        CASE WHEN ats.id IS NULL THEN 'BELUM' ELSE 'SUDAH' END AS status
-                FROM classes c
-                LEFT JOIN attendance_sessions ats ON ats.class_id = c.id AND ats.semester_id = ? AND ats.attendance_date = ?
-                WHERE c.academic_year_id = ? AND c.is_active = 1
-                ORDER BY c.class_name, c.subject_name, ats.lesson_start`)
-      .all(input.semesterId, input.date, input.academicYearId) as Array<Record<string, unknown>>
+                FROM teaching_schedules ts JOIN classes c ON c.id = ts.class_id
+                LEFT JOIN attendance_sessions ats ON ats.teaching_schedule_id = ts.id AND ats.attendance_date = ?
+                WHERE ts.user_id = ? AND ts.semester_id = ? AND ts.day_of_week = ? AND ts.is_active = 1
+                  AND c.academic_year_id = ? AND c.is_active = 1
+                ORDER BY ts.lesson_start, ts.lesson_end, c.class_name`)
+      .all(input.date, input.userId, input.semesterId, day, input.academicYearId) as Array<Record<string, unknown>>
   }
 
   getAttendanceRecap(input: { semesterId: number; academicYearId: number; classId: number; startDate: string; endDate: string }): Array<Record<string, unknown>> {
@@ -882,9 +970,9 @@ export class AppService {
     return Math.round(summative * 0.75 + pas * 0.25)
   }
 
-  listJournals(input: { semesterId: number; classId?: number; search?: string; date?: string }): TeachingJournal[] {
-    const params: unknown[] = [input.semesterId]
-    let where = 'tj.semester_id = ?'
+  listJournals(input: { userId: number; semesterId: number; classId?: number; search?: string; date?: string }): TeachingJournal[] {
+    const params: unknown[] = [input.semesterId, input.userId]
+    let where = 'tj.semester_id = ? AND tj.created_by = ?'
     if (input.classId) {
       where += ' AND tj.class_id = ?'
       params.push(input.classId)
@@ -898,7 +986,7 @@ export class AppService {
       params.push(input.date)
     }
     return this.database.db
-      .prepare(`SELECT tj.id, tj.semester_id AS semesterId, tj.class_id AS classId,
+      .prepare(`SELECT tj.id, tj.teaching_schedule_id AS scheduleId, tj.semester_id AS semesterId, tj.class_id AS classId,
                        c.class_name AS className, c.subject_name AS subjectName,
                        tj.journal_date AS journalDate, tj.lesson_start AS lessonStart,
                        tj.lesson_end AS lessonEnd, tj.learning_material AS learningMaterial,
@@ -909,6 +997,7 @@ export class AppService {
   }
 
   createJournal(input: {
+    scheduleId: number
     semesterId: number
     classId: number
     userId: number
@@ -918,22 +1007,27 @@ export class AppService {
     learningMaterial: string
   }): void {
     if (!input.learningMaterial.trim()) throw new Error('Materi pembelajaran wajib diisi.')
+    const schedule = this.getOwnedSchedule({ scheduleId: input.scheduleId, userId: input.userId, semesterId: input.semesterId, date: input.journalDate })
+    input.classId = schedule.classId
+    input.lessonStart = schedule.lessonStart
+    input.lessonEnd = schedule.lessonEnd
     this.database.db
-      .prepare(`INSERT INTO teaching_journals(semester_id, class_id, journal_date, lesson_start, lesson_end, learning_material, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?)`)
-      .run(input.semesterId, input.classId, input.journalDate, input.lessonStart, input.lessonEnd, input.learningMaterial.trim(), input.userId)
+      .prepare(`INSERT INTO teaching_journals(semester_id, class_id, journal_date, lesson_start, lesson_end, learning_material, created_by, teaching_schedule_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(input.semesterId, input.classId, input.journalDate, input.lessonStart, input.lessonEnd, input.learningMaterial.trim(), input.userId, input.scheduleId)
   }
 
-  updateJournal(input: { id: number; classId: number; journalDate: string; lessonStart: number; lessonEnd: number; learningMaterial: string }): void {
+  updateJournal(input: { id: number; scheduleId: number; userId: number; semesterId: number; classId: number; journalDate: string; lessonStart: number; lessonEnd: number; learningMaterial: string }): void {
     if (!input.learningMaterial.trim()) throw new Error('Materi pembelajaran wajib diisi.')
+    const schedule = this.getOwnedSchedule({ scheduleId: input.scheduleId, userId: input.userId, semesterId: input.semesterId, date: input.journalDate })
     this.database.db
       .prepare(`UPDATE teaching_journals SET class_id = ?, journal_date = ?, lesson_start = ?, lesson_end = ?,
-                learning_material = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-      .run(input.classId, input.journalDate, input.lessonStart, input.lessonEnd, input.learningMaterial.trim(), input.id)
+                learning_material = ?, teaching_schedule_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND created_by = ?`)
+      .run(schedule.classId, input.journalDate, schedule.lessonStart, schedule.lessonEnd, input.learningMaterial.trim(), input.scheduleId, input.id, input.userId)
   }
 
-  deleteJournal(id: number): void {
-    this.database.db.prepare('DELETE FROM teaching_journals WHERE id = ?').run(id)
+  deleteJournal(input: { id: number; userId: number }): void {
+    this.database.db.prepare('DELETE FROM teaching_journals WHERE id = ? AND created_by = ?').run(input.id, input.userId)
   }
 
   getMaintenanceInfo(): MaintenanceInfo {

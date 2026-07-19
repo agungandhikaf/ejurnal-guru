@@ -32,6 +32,14 @@ const api = {
     dashboard: (payload: unknown) => invoke(IPC.TEACHER_DASHBOARD, payload),
     classes: (academicYearId: number) => invoke(IPC.TEACHER_CLASSES, academicYearId)
   },
+  schedules: {
+    list: (payload: unknown) => invoke(IPC.SCHEDULES_LIST, payload),
+    byDate: (payload: unknown) => invoke(IPC.SCHEDULES_BY_DATE, payload),
+    create: (payload: unknown) => invoke(IPC.SCHEDULES_CREATE, payload),
+    update: (payload: unknown) => invoke(IPC.SCHEDULES_UPDATE, payload),
+    delete: (payload: unknown) => invoke(IPC.SCHEDULES_DELETE, payload),
+    bulkDelete: (payload: unknown) => invoke(IPC.SCHEDULES_BULK_DELETE, payload)
+  },
   attendance: {
     form: (payload: unknown) => invoke(IPC.ATTENDANCE_FORM, payload),
     save: (payload: unknown) => invoke(IPC.ATTENDANCE_SAVE, payload),
@@ -50,7 +58,7 @@ const api = {
     list: (payload: unknown) => invoke(IPC.JOURNALS_LIST, payload),
     create: (payload: unknown) => invoke(IPC.JOURNALS_CREATE, payload),
     update: (payload: unknown) => invoke(IPC.JOURNALS_UPDATE, payload),
-    delete: (id: number) => invoke(IPC.JOURNALS_DELETE, id)
+    delete: (payload: unknown) => invoke(IPC.JOURNALS_DELETE, payload)
   },
   maintenance: {
     info: () => invoke(IPC.MAINTENANCE_INFO),
