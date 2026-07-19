@@ -32,9 +32,9 @@ export default function DailyAttendancePage({ session }: { session: LoginSession
         <div className="min-w-56"><label className="label">Tanggal</label><DatePicker value={date} onChange={setDate} /></div>
       </div>
       {error && <div className="rounded-xl bg-rose-50 p-4 text-rose-700">{error}</div>}
-      <div className="card p-6">
-        <div className="mb-5 flex items-center gap-2"><CalendarCheck2 className="text-indigo-600" /><h3 className="font-bold text-slate-900">Status Jurnal Absensi</h3></div>
-        <div className="space-y-3">{rows.map((row, index) => (
+      <div className="card flex min-h-0 flex-1 flex-col overflow-hidden p-6">
+        <div className="mb-5 flex shrink-0 items-center gap-2"><CalendarCheck2 className="text-indigo-600" /><h3 className="font-bold text-slate-900">Status Jurnal Absensi</h3></div>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">{rows.map((row, index) => (
           <div key={`${row.classId}-${row.sessionId ?? index}`} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
             <div>
               <p className="font-bold text-slate-900">{row.subjectName} - {row.className}</p>
