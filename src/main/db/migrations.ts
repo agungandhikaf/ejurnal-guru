@@ -272,5 +272,12 @@ export const migrations: Migration[] = [
       CREATE INDEX idx_attendance_schedule ON attendance_sessions(teaching_schedule_id);
       CREATE INDEX idx_journal_schedule ON teaching_journals(teaching_schedule_id);
     `
+  },
+  {
+    version: 6,
+    name: 'add_student_nickname',
+    sql: `
+      ALTER TABLE students ADD COLUMN nama_panggilan TEXT;
+    `
   }
 ]

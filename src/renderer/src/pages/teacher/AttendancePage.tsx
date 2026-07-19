@@ -121,7 +121,7 @@ export default function AttendancePage({ session }: { session: LoginSession }): 
                 <tr key={row.id}>
                   <td>{index + 1}</td>
                   <td className="font-mono text-xs">{row.nisn}</td>
-                  <td className="font-semibold">{row.namaSiswa}</td>
+                  <td><div className="font-semibold">{row.namaSiswa}</div>{row.namaPanggilan && <div className="mt-0.5 text-xs font-normal text-slate-400">{row.namaPanggilan}</div>}</td>
                   <td><div className="flex flex-wrap justify-center gap-2">{statuses.map((status) => <button key={status.value} onClick={() => setStatus(row.id, status.value)} className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition ${row.status === status.value ? `${status.className} ring-2 ring-slate-200 ring-offset-1` : 'border-slate-200 bg-white text-slate-400'}`}>{status.value}</button>)}</div></td>
                   <td><input className="field py-2" disabled={row.status === 'H'} value={row.note} onChange={(e) => setRows((current) => current.map((item) => item.id === row.id ? { ...item, note: e.target.value } : item))} placeholder={row.status === 'H' ? '-' : 'Keterangan...'} /></td>
                 </tr>

@@ -7,7 +7,8 @@ import Notice from '../../components/Notice'
 import Select from '../../components/Select'
 import { useClasses } from './useClasses'
 
-const emptyForm = { id: 0, nisn: '', namaSiswa: '', jenisKelamin: 'L' as 'L' | 'P' }
+const emptyForm = { id: 0, nisn: '', namaSiswa: '', namaPanggilan: '', jenisKelamin: 'L' as 'L' | 'P' }
+const nicknameInput = (value: string): string => value.replace(/[^\p{L}\s]/gu, '').slice(0, 15)
 
 export default function StudentsPage({ session }: { session: LoginSession }): JSX.Element {
   const { classes } = useClasses(session.academicYearId)
@@ -227,7 +228,7 @@ export default function StudentsPage({ session }: { session: LoginSession }): JS
                 className="field pl-10"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Cari NISN atau nama siswa..."
+                placeholder="Cari NISN, nama, atau nama panggilan..."
               />
             </div>
           </div>
@@ -257,6 +258,7 @@ export default function StudentsPage({ session }: { session: LoginSession }): JS
                 <th>No</th>
                 <th>NISN</th>
                 <th>Nama Siswa</th>
+                <th>Nama Panggilan</th>
                 <th>L/P</th>
                 <th>Kelas</th>
                 <th className="text-right">Aksi</th>
@@ -281,6 +283,7 @@ export default function StudentsPage({ session }: { session: LoginSession }): JS
                     <td>{index + 1}</td>
                     <td className="font-mono text-xs">{row.nisn}</td>
                     <td className="font-semibold">{row.namaSiswa}</td>
+                    <td>{row.namaPanggilan || <span className="text-slate-400">-</span>}</td>
                     <td>{row.jenisKelamin}</td>
                     <td>{row.className}</td>
                     <td className="text-right">
@@ -291,6 +294,7 @@ export default function StudentsPage({ session }: { session: LoginSession }): JS
                             id: row.id,
                             nisn: row.nisn,
                             namaSiswa: row.namaSiswa,
+                            namaPanggilan: row.namaPanggilan ?? '',
                             jenisKelamin: row.jenisKelamin
                           })
                           setClassId(row.classId ?? classId)
@@ -340,6 +344,18 @@ export default function StudentsPage({ session }: { session: LoginSession }): JS
               value={form.namaSiswa}
               onChange={(e) => setForm({ ...form, namaSiswa: e.target.value })}
             />
+          </div>
+
+          <div>
+            <label className="label">Nama Panggilan <span className="font-normal normal-case text-slate-400">(opsional)</span></label>
+            <input
+              className="field"
+              maxLength={15}
+              value={form.namaPanggilan}
+              onChange={(e) => setForm({ ...form, namaPanggilan: nicknameInput(e.target.value) })}
+              placeholder="Maksimal 15 karakter"
+            />
+            <p className="mt-1.5 text-xs text-slate-500">Hanya huruf dan spasi.</p>
           </div>
 
           <div>

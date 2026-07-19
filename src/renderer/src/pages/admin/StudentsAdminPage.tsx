@@ -7,8 +7,9 @@ import Notice from '../../components/Notice'
 import Select from '../../components/Select'
 
 type YearRow = AcademicYear & { semesters: Semester[] }
-type StudentForm = { id: number; classId: number | ''; nisn: string; namaSiswa: string; jenisKelamin: 'L' | 'P' }
-const emptyForm = (classId: number | ''): StudentForm => ({ id: 0, classId, nisn: '', namaSiswa: '', jenisKelamin: 'L' })
+type StudentForm = { id: number; classId: number | ''; nisn: string; namaSiswa: string; namaPanggilan: string; jenisKelamin: 'L' | 'P' }
+const emptyForm = (classId: number | ''): StudentForm => ({ id: 0, classId, nisn: '', namaSiswa: '', namaPanggilan: '', jenisKelamin: 'L' })
+const nicknameInput = (value: string): string => value.replace(/[^\p{L}\s]/gu, '').slice(0, 15)
 
 function importMessage(result: StudentImportResult): string {
   const summary = `Import selesai: ${result.inserted} siswa baru, ${result.updated} diperbarui, ${result.skipped} dilewati.`
@@ -138,16 +139,16 @@ export default function StudentsAdminPage(): JSX.Element {
         <div className="grid grid-cols-[220px_300px_1fr] gap-4">
           <div><label className="label">Tahun Ajaran</label><Select value={yearId} placeholder="Pilih tahun" options={years.map((year) => ({ value: year.id, label: year.label }))} onChange={(value) => setYearId(Number(value))} /></div>
           <div><label className="label">Kelas</label><Select value={classId} placeholder="Pilih kelas" options={classes.map((item) => ({ value: item.id, label: `${item.subjectName} - ${item.className}` }))} onChange={(value) => setClassId(Number(value))} /></div>
-          <div><label className="label">Pencarian</label><div className="relative"><Search size={16} className="absolute left-3.5 top-3 text-slate-400" /><input className="field pl-10" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari NISN atau nama siswa..." /></div></div>
+          <div><label className="label">Pencarian</label><div className="relative"><Search size={16} className="absolute left-3.5 top-3 text-slate-400" /><input className="field pl-10" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari NISN, nama, atau nama panggilan..." /></div></div>
         </div>
-        <p className="mt-3 text-xs text-slate-500">Import menerima file XLSX dengan kolom NISN, Nama Siswa, dan Jenis Kelamin. NISN harus 5-20 digit; jenis kelamin dapat diisi L, P, Laki-laki, atau Perempuan.</p>
+        <p className="mt-3 text-xs text-slate-500">Import menerima file XLSX dengan kolom NISN, Nama Siswa, Nama Panggilan (opsional), dan Jenis Kelamin. NISN harus 5-20 digit; jenis kelamin dapat diisi L, P, Laki-laki, atau Perempuan.</p>
         <div className="table-wrap mt-5 max-h-[520px]">
           <table className="table-base">
-            <thead><tr><th>No</th><th>NISN</th><th>Nama Siswa</th><th>L/P</th><th>Kelas</th><th className="text-right">Aksi</th></tr></thead>
+            <thead><tr><th>No</th><th>NISN</th><th>Nama Siswa</th><th>Nama Panggilan</th><th>L/P</th><th>Kelas</th><th className="text-right">Aksi</th></tr></thead>
             <tbody>{rows.map((row, index) => (
               <tr key={`${row.id}-${row.classId}`}>
-                <td>{index + 1}</td><td className="font-mono text-xs">{row.nisn}</td><td className="font-semibold">{row.namaSiswa}</td><td>{row.jenisKelamin}</td><td>{row.className}</td>
-                <td className="text-right"><div className="flex justify-end gap-3"><button className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600" onClick={() => { setForm({ id: row.id, classId: row.classId ?? classId, nisn: row.nisn, namaSiswa: row.namaSiswa, jenisKelamin: row.jenisKelamin }); setOpen(true) }}><Pencil size={14} /> Edit</button><button className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600" onClick={() => void remove(row)}><Trash2 size={14} /> Hapus</button></div></td>
+                <td>{index + 1}</td><td className="font-mono text-xs">{row.nisn}</td><td className="font-semibold">{row.namaSiswa}</td><td>{row.namaPanggilan || <span className="text-slate-400">-</span>}</td><td>{row.jenisKelamin}</td><td>{row.className}</td>
+                <td className="text-right"><div className="flex justify-end gap-3"><button className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600" onClick={() => { setForm({ id: row.id, classId: row.classId ?? classId, nisn: row.nisn, namaSiswa: row.namaSiswa, namaPanggilan: row.namaPanggilan ?? '', jenisKelamin: row.jenisKelamin }); setOpen(true) }}><Pencil size={14} /> Edit</button><button className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600" onClick={() => void remove(row)}><Trash2 size={14} /> Hapus</button></div></td>
               </tr>
             ))}</tbody>
           </table>
@@ -159,6 +160,7 @@ export default function StudentsAdminPage(): JSX.Element {
           <div><label className="label">Kelas</label><Select value={form.classId} placeholder="Pilih kelas" options={classes.map((item) => ({ value: item.id, label: `${item.subjectName} - ${item.className}` }))} onChange={(value) => setForm({ ...form, classId: Number(value) })} /></div>
           <div><label className="label">NISN</label><input className="field" inputMode="numeric" value={form.nisn} onChange={(event) => setForm({ ...form, nisn: event.target.value.replace(/\D/g, '') })} /><p className="mt-1.5 text-xs text-slate-500">Gunakan 5-20 digit.</p></div>
           <div><label className="label">Nama Siswa</label><input className="field" value={form.namaSiswa} onChange={(event) => setForm({ ...form, namaSiswa: event.target.value })} /></div>
+          <div><label className="label">Nama Panggilan <span className="font-normal normal-case text-slate-400">(opsional)</span></label><input className="field" maxLength={15} value={form.namaPanggilan} onChange={(event) => setForm({ ...form, namaPanggilan: nicknameInput(event.target.value) })} placeholder="Maksimal 15 karakter" /><p className="mt-1.5 text-xs text-slate-500">Hanya huruf dan spasi.</p></div>
           <div><label className="label">Jenis Kelamin</label><Select value={form.jenisKelamin} options={[{ value: 'L', label: 'Laki-laki' }, { value: 'P', label: 'Perempuan' }]} onChange={(value) => setForm({ ...form, jenisKelamin: value as 'L' | 'P' })} /></div>
         </div>
       </Modal>

@@ -10,6 +10,7 @@ interface RecapRow {
   id: number
   nisn: string
   namaSiswa: string
+  namaPanggilan?: string
   hadir: number
   sakit: number
   izin: number
@@ -75,7 +76,7 @@ export default function AttendanceRecapPage({ session }: { session: LoginSession
         <div className="table-wrap mt-5 max-h-[480px]">
           <table className="table-base">
             <thead><tr><th>No</th><th>NISN</th><th>Nama Siswa</th><th className="!bg-emerald-100 text-center !text-emerald-800">H</th><th className="!bg-amber-100 text-center !text-amber-800">S</th><th className="!bg-blue-100 text-center !text-blue-800">I</th><th className="!bg-violet-100 text-center !text-violet-800">D</th><th className="!bg-rose-100 text-center !text-rose-800">A</th><th className="text-center">Total</th><th className="text-right">Skor</th></tr></thead>
-            <tbody>{rows.map((row, index) => <tr key={row.id}><td>{index + 1}</td><td className="font-mono text-xs">{row.nisn}</td><td className="font-semibold">{row.namaSiswa}</td><td className="!bg-emerald-50 text-center font-semibold !text-emerald-700">{row.hadir}</td><td className="!bg-amber-50 text-center font-semibold !text-amber-700">{row.sakit}</td><td className="!bg-blue-50 text-center font-semibold !text-blue-700">{row.izin}</td><td className="!bg-violet-50 text-center font-semibold !text-violet-700">{row.dispen}</td><td className="!bg-rose-50 text-center font-semibold !text-rose-700">{row.alpa}</td><td className="text-center">{row.total}</td><td className="text-right font-bold text-indigo-700">{Number(row.skor).toFixed(1)}%</td></tr>)}</tbody>
+            <tbody>{rows.map((row, index) => <tr key={row.id}><td>{index + 1}</td><td className="font-mono text-xs">{row.nisn}</td><td><div className="font-semibold">{row.namaSiswa}</div>{row.namaPanggilan && <div className="mt-0.5 text-xs text-slate-400">{row.namaPanggilan}</div>}</td><td className="!bg-emerald-50 text-center font-semibold !text-emerald-700">{row.hadir}</td><td className="!bg-amber-50 text-center font-semibold !text-amber-700">{row.sakit}</td><td className="!bg-blue-50 text-center font-semibold !text-blue-700">{row.izin}</td><td className="!bg-violet-50 text-center font-semibold !text-violet-700">{row.dispen}</td><td className="!bg-rose-50 text-center font-semibold !text-rose-700">{row.alpa}</td><td className="text-center">{row.total}</td><td className="text-right font-bold text-indigo-700">{Number(row.skor).toFixed(1)}%</td></tr>)}</tbody>
           </table>
         </div>
       </div>

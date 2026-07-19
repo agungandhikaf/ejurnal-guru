@@ -37,6 +37,7 @@ interface LoginInput {
 interface StudentImportRow {
   nisn: string
   namaSiswa: string
+  namaPanggilan: string
   jenisKelamin: 'L' | 'P'
 }
 
@@ -274,12 +275,12 @@ export class AppService {
       params.push(input.classId)
     }
     if (input.search?.trim()) {
-      where += ' AND (s.nisn LIKE ? OR s.nama_siswa LIKE ?)'
+      where += ' AND (s.nisn LIKE ? OR s.nama_siswa LIKE ? OR s.nama_panggilan LIKE ?)'
       const q = `%${input.search.trim()}%`
-      params.push(q, q)
+      params.push(q, q, q)
     }
     return this.database.db
-      .prepare(`SELECT s.id, s.nisn, s.nama_siswa AS namaSiswa, s.jenis_kelamin AS jenisKelamin,
+      .prepare(`SELECT s.id, s.nisn, s.nama_siswa AS namaSiswa, COALESCE(s.nama_panggilan, '') AS namaPanggilan, s.jenis_kelamin AS jenisKelamin,
                        c.id AS classId, c.class_name AS className
                 FROM students s
                 JOIN student_enrollments se ON se.student_id = s.id
@@ -289,23 +290,23 @@ export class AppService {
       .all(...params) as Student[]
   }
 
-  createStudent(input: { academicYearId: number; classId: number; nisn: string; namaSiswa: string; jenisKelamin: 'L' | 'P' }): void {
+  createStudent(input: { academicYearId: number; classId: number; nisn: string; namaSiswa: string; namaPanggilan?: string; jenisKelamin: 'L' | 'P' }): void {
     this.validateStudent(input)
     const transaction = this.database.db.transaction(() => {
       this.database.db
-        .prepare(`INSERT INTO students(nisn, nama_siswa, jenis_kelamin)
-                  VALUES (?, ?, ?)
+        .prepare(`INSERT INTO students(nisn, nama_siswa, nama_panggilan, jenis_kelamin)
+                  VALUES (?, ?, ?, ?)
                   ON CONFLICT(nisn) DO UPDATE SET nama_siswa = excluded.nama_siswa,
-                    jenis_kelamin = excluded.jenis_kelamin, is_active = 1,
+                    nama_panggilan = excluded.nama_panggilan, jenis_kelamin = excluded.jenis_kelamin, is_active = 1,
                     updated_at = CURRENT_TIMESTAMP`)
-        .run(input.nisn.trim(), input.namaSiswa.trim(), input.jenisKelamin)
+        .run(input.nisn.trim(), input.namaSiswa.trim(), input.namaPanggilan?.trim() || null, input.jenisKelamin)
       const student = this.database.db.prepare('SELECT id FROM students WHERE nisn = ?').get(input.nisn.trim()) as { id: number }
       this.assignStudentToClassName(input.academicYearId, student.id, input.classId)
     })
     transaction()
   }
 
-  updateStudent(input: { id: number; academicYearId: number; classId: number; nisn: string; namaSiswa: string; jenisKelamin: 'L' | 'P' }): void {
+  updateStudent(input: { id: number; academicYearId: number; classId: number; nisn: string; namaSiswa: string; namaPanggilan?: string; jenisKelamin: 'L' | 'P' }): void {
     this.validateStudent(input)
     const duplicate = this.database.db
       .prepare('SELECT id FROM students WHERE nisn = ? AND id <> ?')
@@ -313,9 +314,9 @@ export class AppService {
     if (duplicate) throw new Error(`NISN ${input.nisn.trim()} sudah digunakan siswa lain.`)
     const transaction = this.database.db.transaction(() => {
       this.database.db
-        .prepare(`UPDATE students SET nisn = ?, nama_siswa = ?, jenis_kelamin = ?, is_active = 1,
+        .prepare(`UPDATE students SET nisn = ?, nama_siswa = ?, nama_panggilan = ?, jenis_kelamin = ?, is_active = 1,
                   updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-        .run(input.nisn.trim(), input.namaSiswa.trim(), input.jenisKelamin, input.id)
+        .run(input.nisn.trim(), input.namaSiswa.trim(), input.namaPanggilan?.trim() || null, input.jenisKelamin, input.id)
       this.assignStudentToClassName(input.academicYearId, input.id, input.classId)
     })
     transaction()
@@ -329,9 +330,12 @@ export class AppService {
     if (!result.changes) throw new Error('Data siswa aktif tidak ditemukan pada tahun ajaran ini.')
   }
 
-  private validateStudent(input: { nisn: string; namaSiswa: string; jenisKelamin: string }): void {
+  private validateStudent(input: { nisn: string; namaSiswa: string; namaPanggilan?: string; jenisKelamin: string }): void {
     if (!input.nisn.trim() || !input.namaSiswa.trim()) throw new Error('NISN dan nama siswa wajib diisi.')
     if (!/^\d{5,20}$/.test(input.nisn.trim())) throw new Error('NISN harus berupa 5-20 digit.')
+    const nickname = input.namaPanggilan?.trim() ?? ''
+    if (nickname.length > 15) throw new Error('Nama panggilan maksimal 15 karakter.')
+    if (nickname && !/^\p{L}+(?:\s+\p{L}+)*$/u.test(nickname)) throw new Error('Nama panggilan hanya boleh berisi huruf dan spasi.')
     if (!['L', 'P'].includes(input.jenisKelamin)) throw new Error('Jenis kelamin harus L atau P.')
   }
 
@@ -347,11 +351,12 @@ export class AppService {
     sheet.columns = [
       { header: 'NISN', key: 'nisn', width: 18, style: { numFmt: '@' } },
       { header: 'Nama Siswa', key: 'namaSiswa', width: 34 },
+      { header: 'Nama Panggilan', key: 'namaPanggilan', width: 24 },
       { header: 'Jenis Kelamin', key: 'jenisKelamin', width: 18 }
     ]
     sheet.addRows([
-      { nisn: '0012345678', namaSiswa: 'Contoh Siswa', jenisKelamin: 'L' },
-      { nisn: '0012345679', namaSiswa: 'Contoh Siswi', jenisKelamin: 'P' }
+      { nisn: '0012345678', namaSiswa: 'Contoh Siswa', namaPanggilan: 'Budi', jenisKelamin: 'L' },
+      { nisn: '0012345679', namaSiswa: 'Contoh Siswi', namaPanggilan: '', jenisKelamin: 'P' }
     ])
     sheet.getRow(1).font = { bold: true }
     sheet.views = [{ state: 'frozen', ySplit: 1 }]
@@ -377,6 +382,7 @@ export class AppService {
     sheet.getRow(1).eachCell((cell, columnNumber) => headerMap.set(normalize(cell.text), columnNumber))
     const nisnColumn = headerMap.get('nisn')
     const nameColumn = headerMap.get('namasiswa') ?? headerMap.get('nama')
+    const nicknameColumn = headerMap.get('namapanggilan') ?? headerMap.get('panggilan')
     const genderColumn = headerMap.get('jeniskelamin') ?? headerMap.get('gender')
     if (!nisnColumn || !nameColumn || !genderColumn) {
       throw new Error('Kolom wajib: NISN, Nama Siswa, dan Jenis Kelamin.')
@@ -389,14 +395,19 @@ export class AppService {
       const row = sheet.getRow(rowNumber)
       const nisn = row.getCell(nisnColumn).text.trim()
       const namaSiswa = row.getCell(nameColumn).text.trim()
+      const namaPanggilan = nicknameColumn ? row.getCell(nicknameColumn).text.trim() : ''
       const genderRaw = row.getCell(genderColumn).text.trim().toUpperCase()
-      if (!nisn && !namaSiswa && !genderRaw) continue
+      if (!nisn && !namaSiswa && !namaPanggilan && !genderRaw) continue
       const jenisKelamin = genderRaw.startsWith('P') ? 'P' : genderRaw.startsWith('L') ? 'L' : null
       let reason = ''
       if (!/^\d{5,20}$/.test(nisn)) {
         reason = 'NISN wajib berupa 5-20 digit. Gunakan format Text di Excel agar angka nol di depan tidak hilang.'
       } else if (!namaSiswa) {
         reason = 'Nama siswa kosong.'
+      } else if (namaPanggilan.length > 15) {
+        reason = 'Nama panggilan maksimal 15 karakter.'
+      } else if (namaPanggilan && !/^\p{L}+(?:\s+\p{L}+)*$/u.test(namaPanggilan)) {
+        reason = 'Nama panggilan hanya boleh berisi huruf dan spasi.'
       } else if (!jenisKelamin) {
         reason = 'Jenis kelamin harus L, P, Laki-laki, atau Perempuan.'
       } else if (firstRowByNisn.has(nisn)) {
@@ -407,22 +418,22 @@ export class AppService {
         continue
       }
       firstRowByNisn.set(nisn, rowNumber)
-      rows.push({ nisn, namaSiswa, jenisKelamin: jenisKelamin as 'L' | 'P' })
+      rows.push({ nisn, namaSiswa, namaPanggilan, jenisKelamin: jenisKelamin as 'L' | 'P' })
     }
 
     let inserted = 0
     let updated = 0
     const transaction = this.database.db.transaction(() => {
       const find = this.database.db.prepare('SELECT id FROM students WHERE nisn = ?')
-      const upsertStudent = this.database.db.prepare(`INSERT INTO students(nisn, nama_siswa, jenis_kelamin)
-        VALUES (?, ?, ?)
+      const upsertStudent = this.database.db.prepare(`INSERT INTO students(nisn, nama_siswa, nama_panggilan, jenis_kelamin)
+        VALUES (?, ?, ?, ?)
         ON CONFLICT(nisn) DO UPDATE SET nama_siswa = excluded.nama_siswa,
-          jenis_kelamin = excluded.jenis_kelamin, is_active = 1,
+          nama_panggilan = excluded.nama_panggilan, jenis_kelamin = excluded.jenis_kelamin, is_active = 1,
           updated_at = CURRENT_TIMESTAMP`)
       const findAfter = this.database.db.prepare('SELECT id FROM students WHERE nisn = ?')
       for (const row of rows) {
         const existing = find.get(row.nisn)
-        upsertStudent.run(row.nisn, row.namaSiswa, row.jenisKelamin)
+        upsertStudent.run(row.nisn, row.namaSiswa, row.namaPanggilan || null, row.jenisKelamin)
         const student = findAfter.get(row.nisn) as { id: number }
         this.assignStudentToClassName(input.academicYearId, student.id, input.classId)
         existing ? updated++ : inserted++
@@ -565,7 +576,7 @@ export class AppService {
     input.lessonStart = schedule.lessonStart
     input.lessonEnd = schedule.lessonEnd
     const rows = this.database.db
-      .prepare(`SELECT s.id, s.nisn, s.nama_siswa AS namaSiswa, s.jenis_kelamin AS jenisKelamin,
+      .prepare(`SELECT s.id, s.nisn, s.nama_siswa AS namaSiswa, COALESCE(s.nama_panggilan, '') AS namaPanggilan, s.jenis_kelamin AS jenisKelamin,
                        c.id AS classId, c.class_name AS className,
                        COALESCE(ar.status, 'H') AS status, COALESCE(ar.note, '') AS note
                 FROM student_enrollments se
@@ -641,7 +652,7 @@ export class AppService {
 
   getAttendanceRecap(input: { semesterId: number; academicYearId: number; classId: number; startDate: string; endDate: string }): Array<Record<string, unknown>> {
     return this.database.db
-      .prepare(`SELECT s.id, s.nisn, s.nama_siswa AS namaSiswa,
+      .prepare(`SELECT s.id, s.nisn, s.nama_siswa AS namaSiswa, COALESCE(s.nama_panggilan, '') AS namaPanggilan,
         SUM(CASE WHEN ats.id IS NOT NULL AND ar.status = 'H' THEN 1 ELSE 0 END) AS hadir,
         SUM(CASE WHEN ats.id IS NOT NULL AND ar.status = 'S' THEN 1 ELSE 0 END) AS sakit,
         SUM(CASE WHEN ats.id IS NOT NULL AND ar.status = 'I' THEN 1 ELSE 0 END) AS izin,

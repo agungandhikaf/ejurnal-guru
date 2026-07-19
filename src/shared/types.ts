@@ -52,6 +52,7 @@ export interface Student {
   id: number
   nisn: string
   namaSiswa: string
+  namaPanggilan?: string
   jenisKelamin: 'L' | 'P'
   classId?: number
   className?: string
