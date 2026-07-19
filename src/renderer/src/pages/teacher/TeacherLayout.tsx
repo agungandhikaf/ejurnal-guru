@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   LayoutDashboard, ClipboardCheck, CalendarCheck2, ChartNoAxesColumnIncreasing,
-  Star, Users, BookOpenText, LogOut, GraduationCap
+  Star, Users, BookOpenText, LogOut, GraduationCap, CalendarClock
 } from 'lucide-react'
 import type { LoginSession } from '@shared/types'
 import AppCopyright from '../../components/AppCopyright'
@@ -12,12 +12,14 @@ import AttendanceRecapPage from './AttendanceRecapPage'
 import GradesPage from './GradesPage'
 import StudentsPage from './StudentsPage'
 import JournalsPage from './JournalsPage'
+import SchedulesPage from './SchedulesPage'
 
 interface Props { session: LoginSession; onLogout: () => void }
-type Page = 'dashboard' | 'attendance' | 'daily' | 'recap' | 'grades' | 'students' | 'journals'
+type Page = 'dashboard' | 'schedules' | 'attendance' | 'daily' | 'recap' | 'grades' | 'students' | 'journals'
 
 const nav = [
   { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'schedules' as const, label: 'Jadwal Mengajar', icon: CalendarClock },
   { id: 'attendance' as const, label: 'Input Presensi', icon: ClipboardCheck },
   { id: 'daily' as const, label: 'Absensi Harian', icon: CalendarCheck2 },
   { id: 'recap' as const, label: 'Rekap Absen', icon: ChartNoAxesColumnIncreasing },
@@ -30,6 +32,7 @@ export default function TeacherLayout({ session, onLogout }: Props): JSX.Element
   const [page, setPage] = useState<Page>('dashboard')
   const content = {
     dashboard: <DashboardPage session={session} />,
+    schedules: <SchedulesPage session={session} />,
     attendance: <AttendancePage session={session} />,
     daily: <DailyAttendancePage session={session} />,
     recap: <AttendanceRecapPage session={session} />,

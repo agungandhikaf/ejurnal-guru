@@ -5,6 +5,7 @@ import { today, unwrap } from '../../lib/api'
 import DatePicker from '../../components/DatePicker'
 
 interface DailyRow {
+  scheduleId: number
   classId: number
   className: string
   subjectName: string
@@ -20,7 +21,7 @@ export default function DailyAttendancePage({ session }: { session: LoginSession
   const [error, setError] = useState('')
 
   useEffect(() => {
-    window.api.attendance.daily({ semesterId: session.semesterId, academicYearId: session.academicYearId, date })
+    window.api.attendance.daily({ userId: session.userId, semesterId: session.semesterId, academicYearId: session.academicYearId, date })
       .then((response) => setRows(unwrap<DailyRow[]>(response)))
       .catch((e) => setError(e.message))
   }, [date, session])
@@ -34,11 +35,11 @@ export default function DailyAttendancePage({ session }: { session: LoginSession
       {error && <div className="rounded-xl bg-rose-50 p-4 text-rose-700">{error}</div>}
       <div className="card flex min-h-0 flex-1 flex-col overflow-hidden p-6">
         <div className="mb-5 flex shrink-0 items-center gap-2"><CalendarCheck2 className="text-indigo-600" /><h3 className="font-bold text-slate-900">Status Jurnal Absensi</h3></div>
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">{rows.map((row, index) => (
-          <div key={`${row.classId}-${row.sessionId ?? index}`} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">{!rows.length ? <div className="py-12 text-center text-sm text-slate-500">Tidak ada jadwal mengajar pada tanggal ini.</div> : rows.map((row) => (
+          <div key={row.scheduleId} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
             <div>
               <p className="font-bold text-slate-900">{row.subjectName} - {row.className}</p>
-              <p className="mt-1 text-xs text-slate-500">{row.sessionId ? `Jam ke-${row.lessonStart}${row.lessonEnd !== row.lessonStart ? ` s.d. ${row.lessonEnd}` : ''}` : 'Belum ada pengisian pada tanggal ini'}</p>
+              <p className="mt-1 text-xs text-slate-500">Jam ke-{row.lessonStart}{row.lessonEnd !== row.lessonStart ? ` s.d. ${row.lessonEnd}` : ''}</p>
             </div>
             {row.status === 'SUDAH' ? <span className="badge bg-emerald-100 text-emerald-700"><CheckCircle2 size={14} className="mr-1" /> Sudah Diisi</span> : <span className="badge bg-amber-100 text-amber-700"><Clock3 size={14} className="mr-1" /> Belum Diisi</span>}
           </div>
