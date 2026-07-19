@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { join } from 'node:path'
+import fs from 'node:fs'
+import { basename, join } from 'node:path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import { AppDatabase } from './db/database'
@@ -71,6 +72,8 @@ function handle<TArgs extends unknown[], TResult>(channel: string, fn: (...args:
 function registerIpc(): void {
   handle(IPC.AUTH_OPTIONS, () => service.getLoginOptions())
   handle(IPC.AUTH_LOGIN, (payload) => service.login(payload as never))
+  handle(IPC.AUTH_LOGOUT, () => undefined)
+  handle(IPC.AUTH_SESSION, () => null)
   handle(IPC.ADMIN_TEACHERS_LIST, () => service.listTeachers())
   handle(IPC.ADMIN_TEACHERS_CREATE, (payload) => service.createTeacher(payload as never))
   handle(IPC.ADMIN_TEACHERS_UPDATE, (payload) => service.updateTeacher(payload as never))
@@ -85,31 +88,83 @@ function registerIpc(): void {
   handle(IPC.ADMIN_STUDENTS_CREATE, (payload) => service.createStudent(payload as never))
   handle(IPC.ADMIN_STUDENTS_UPDATE, (payload) => service.updateStudent(payload as never))
   handle(IPC.ADMIN_STUDENTS_DELETE, (payload) => service.deleteStudent(payload as never))
-  handle(IPC.ADMIN_STUDENTS_TEMPLATE, () => service.createStudentTemplate())
-  handle(IPC.ADMIN_STUDENTS_IMPORT, (payload) => service.importStudents(payload as never))
+  handle(IPC.ADMIN_STUDENTS_TEMPLATE, async () => {
+    const result = await dialog.showSaveDialog({
+      title: 'Simpan Template Import Siswa', defaultPath: 'template-import-siswa.xlsx',
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+    })
+    if (result.canceled || !result.filePath) return null
+    fs.writeFileSync(result.filePath, await service.createStudentTemplate())
+    return result.filePath
+  })
+  handle(IPC.ADMIN_STUDENTS_IMPORT, async (payload) => {
+    const result = await dialog.showOpenDialog({
+      title: 'Pilih File Excel Siswa', properties: ['openFile'],
+      filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }]
+    })
+    if (result.canceled || !result.filePaths[0]) {
+      return { inserted: 0, updated: 0, skipped: 0, issues: [], canceled: true }
+    }
+    return service.importStudents({ ...(payload as object), file: fs.readFileSync(result.filePaths[0]) } as never)
+  })
   handle(IPC.TEACHER_DASHBOARD, (payload) => service.getDashboard(payload as never))
   handle(IPC.TEACHER_CLASSES, (academicYearId) => service.listClasses(Number(academicYearId)))
   handle(IPC.ATTENDANCE_FORM, (payload) => service.getAttendanceForm(payload as never))
   handle(IPC.ATTENDANCE_SAVE, (payload) => service.saveAttendance(payload as never))
   handle(IPC.ATTENDANCE_DAILY, (payload) => service.getDailyAttendance(payload as never))
   handle(IPC.ATTENDANCE_RECAP, (payload) => service.getAttendanceRecap(payload as never))
-  handle(IPC.ATTENDANCE_EXPORT, (payload) => service.exportAttendanceRecap(payload as never))
+  handle(IPC.ATTENDANCE_EXPORT, async (payload) => {
+    const exported = await service.exportAttendanceRecap(payload as never)
+    const result = await dialog.showSaveDialog({
+      title: 'Export Rekap Absensi', defaultPath: exported.fileName,
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+    })
+    if (result.canceled || !result.filePath) return null
+    fs.writeFileSync(result.filePath, exported.data)
+    return result.filePath
+  })
   handle(IPC.GRADES_CONFIG_GET, (payload) => service.getGradeConfig(payload as never))
   handle(IPC.GRADES_CONFIG_SAVE, (payload) => service.saveGradeConfig(payload as never))
   handle(IPC.GRADES_SHEET_GET, (payload) => service.getGradeSheet(payload as never))
   handle(IPC.GRADES_SCORES_SAVE, (payload) => service.saveGradeScores(payload as never))
-  handle(IPC.GRADES_EXPORT, (payload) => service.exportGrades(payload as never))
+  handle(IPC.GRADES_EXPORT, async (payload) => {
+    const exported = await service.exportGrades(payload as never)
+    const result = await dialog.showSaveDialog({
+      title: 'Export Nilai', defaultPath: join(app.getPath('documents'), exported.fileName),
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+    })
+    if (result.canceled || !result.filePath) return null
+    fs.writeFileSync(result.filePath, exported.data)
+    return result.filePath
+  })
   handle(IPC.JOURNALS_LIST, (payload) => service.listJournals(payload as never))
   handle(IPC.JOURNALS_CREATE, (payload) => service.createJournal(payload as never))
   handle(IPC.JOURNALS_UPDATE, (payload) => service.updateJournal(payload as never))
   handle(IPC.JOURNALS_DELETE, (id) => service.deleteJournal(Number(id)))
   handle(IPC.MAINTENANCE_INFO, () => service.getMaintenanceInfo())
-  handle(IPC.MAINTENANCE_BACKUP, () => service.createBackup())
+  handle(IPC.MAINTENANCE_BACKUP, async () => {
+    const source = service.createBackup()
+    const result = await dialog.showSaveDialog({
+      title: 'Simpan Backup Database', defaultPath: basename(source),
+      filters: [{ name: 'SQLite Database', extensions: ['db'] }]
+    })
+    if (result.canceled || !result.filePath) return source
+    fs.copyFileSync(source, result.filePath)
+    return result.filePath
+  })
   handle(IPC.MAINTENANCE_OPEN_DATA_FOLDER, () => {
     shell.showItemInFolder(database.dbPath)
     return database.dbPath
   })
-  handle(IPC.MAINTENANCE_SQL_PATCH, () => service.applySqlPatch())
+  handle(IPC.MAINTENANCE_SQL_PATCH, async () => {
+    const result = await dialog.showOpenDialog({
+      title: 'Pilih SQL Patch', properties: ['openFile'],
+      filters: [{ name: 'SQL Patch', extensions: ['sql', 'ejpatch'] }]
+    })
+    if (result.canceled || !result.filePaths[0]) throw new Error('Tidak ada file patch yang dipilih.')
+    const filePath = result.filePaths[0]
+    return service.applySqlPatch({ sql: fs.readFileSync(filePath, 'utf8'), patchName: basename(filePath) })
+  })
   handle(IPC.UPDATER_CHECK, async () => {
     if (environment !== 'prod' || is.dev) throw new Error('Pemeriksaan update hanya aktif pada build production.')
     await autoUpdater.checkForUpdates()
@@ -148,7 +203,10 @@ app.whenReady().then(() => {
     console.info(`[E-Jurnal] userData=${app.getPath('userData')}`)
     database = new AppDatabase(app.getPath('userData'))
     console.info(`[E-Jurnal] database=${database.dbPath}`)
-    service = new AppService(database, environment)
+    const templatesDir = app.isPackaged
+      ? join(process.resourcesPath, 'templates')
+      : join(app.getAppPath(), 'resources', 'templates')
+    service = new AppService(database, environment, app.getVersion(), templatesDir)
     registerIpc()
     configureUpdater()
     createWindow()

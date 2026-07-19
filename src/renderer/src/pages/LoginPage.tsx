@@ -88,8 +88,8 @@ export default function LoginPage({ onLogin }: Props): JSX.Element {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-100">
-      <section className="relative flex w-[48%] flex-col justify-between overflow-hidden bg-[#111625] p-14 text-white">
+    <div className="flex min-h-screen flex-col bg-slate-100 lg:flex-row">
+      <section className="relative flex w-full flex-col justify-between overflow-hidden bg-[#111625] p-8 text-white lg:w-[48%] lg:p-14">
         <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-indigo-600/30 blur-3xl" />
         <div className="absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-fuchsia-600/20 blur-3xl" />
         <div className="relative z-10">
@@ -102,14 +102,14 @@ export default function LoginPage({ onLogin }: Props): JSX.Element {
           </div>
         </div>
         <div className="relative z-10 max-w-xl">
-          <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-semibold text-indigo-200">Desktop Offline • macOS Apple Silicon</span>
-          <h2 className="mt-5 text-4xl font-bold leading-tight">Administrasi mengajar yang rapi tanpa bergantung pada internet.</h2>
-          <p className="mt-4 text-base leading-7 text-slate-300">Data disimpan lokal, dipisahkan berdasarkan tahun ajaran dan semester, serta dapat dicadangkan kapan pun.</p>
+          <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-semibold text-indigo-200">Aplikasi Web • Akses Aman Terpusat</span>
+          <h2 className="mt-5 text-4xl font-bold leading-tight">Administrasi mengajar yang rapi dan dapat diakses bersama.</h2>
+          <p className="mt-4 text-base leading-7 text-slate-300">Data disimpan terpusat pada server sekolah, dipisahkan berdasarkan tahun ajaran dan semester, serta dapat dicadangkan kapan pun.</p>
         </div>
         <AppCopyright className="relative z-10 text-xs text-slate-500" />
       </section>
 
-      <section className="flex flex-1 items-center justify-center p-12">
+      <section className="flex flex-1 items-center justify-center p-6 lg:p-12">
         <form onSubmit={submit} className="card w-full max-w-lg p-8">
           <div className="flex items-start justify-between gap-5">
             <div>

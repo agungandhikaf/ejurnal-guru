@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { app, dialog } from 'electron'
 import bcrypt from 'bcryptjs'
 import ExcelJS from 'exceljs'
 import type { AppDatabase } from '../db/database'
@@ -40,7 +39,12 @@ interface StudentImportRow {
 }
 
 export class AppService {
-  constructor(private readonly database: AppDatabase, private readonly environment: string) {}
+  constructor(
+    private readonly database: AppDatabase,
+    private readonly environment: string,
+    private readonly appVersion: string,
+    private readonly templatesDir: string
+  ) {}
 
   getLoginOptions(): { years: Array<AcademicYear & { semesters: Semester[] }> } {
     const years = this.database.db
@@ -334,13 +338,7 @@ export class AppService {
     if (!['L', 'P'].includes(input.jenisKelamin)) throw new Error('Jenis kelamin harus L atau P.')
   }
 
-  async createStudentTemplate(): Promise<string | null> {
-    const result = await dialog.showSaveDialog({
-      title: 'Simpan Template Import Siswa',
-      defaultPath: 'template-import-siswa.xlsx',
-      filters: [{ name: 'Excel', extensions: ['xlsx'] }]
-    })
-    if (result.canceled || !result.filePath) return null
+  async createStudentTemplate(): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook()
     const sheet = workbook.addWorksheet('Siswa')
     sheet.columns = [
@@ -354,20 +352,12 @@ export class AppService {
     ])
     sheet.getRow(1).font = { bold: true }
     sheet.views = [{ state: 'frozen', ySplit: 1 }]
-    await workbook.xlsx.writeFile(result.filePath)
-    return result.filePath
+    return Buffer.from(await workbook.xlsx.writeBuffer())
   }
 
-  async importStudents(input: { academicYearId: number; classId: number }): Promise<StudentImportResult> {
-    const result = await dialog.showOpenDialog({
-      title: 'Pilih File Excel Siswa',
-      properties: ['openFile'],
-      filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }]
-    })
-    if (result.canceled || result.filePaths.length === 0) return { inserted: 0, updated: 0, skipped: 0, issues: [], canceled: true }
-
+  async importStudents(input: { academicYearId: number; classId: number; file: Buffer }): Promise<StudentImportResult> {
     const workbook = new ExcelJS.Workbook()
-    await workbook.xlsx.readFile(result.filePaths[0])
+    await workbook.xlsx.load(Uint8Array.from(input.file).buffer)
     const sheet = workbook.worksheets[0]
     if (!sheet) throw new Error('File Excel tidak memiliki worksheet.')
 
@@ -575,7 +565,7 @@ export class AppService {
       .all(input.semesterId, input.startDate, input.endDate, input.academicYearId, input.classId) as Array<Record<string, unknown>>
   }
 
-  async exportAttendanceRecap(input: { semesterId: number; academicYearId: number; classId: number; startDate: string; endDate: string }): Promise<string | null> {
+  async exportAttendanceRecap(input: { semesterId: number; academicYearId: number; classId: number; startDate: string; endDate: string }): Promise<{ fileName: string; data: Buffer }> {
     const recap = this.getAttendanceRecap(input)
     const context = this.database.db
       .prepare(`SELECT c.class_name AS className, c.subject_name AS subjectName,
@@ -588,13 +578,6 @@ export class AppService {
       | { className: string; subjectName: string; academicYearLabel: string; semesterName: string }
       | undefined
     if (!context) throw new Error('Konteks kelas tidak ditemukan.')
-
-    const result = await dialog.showSaveDialog({
-      title: 'Export Rekap Absensi',
-      defaultPath: `rekap-absensi-${context.className}-${input.startDate}-${input.endDate}.xlsx`,
-      filters: [{ name: 'Excel', extensions: ['xlsx'] }]
-    })
-    if (result.canceled || !result.filePath) return null
 
     const workbook = new ExcelJS.Workbook()
     workbook.creator = 'E-Jurnal Guru'
@@ -672,8 +655,10 @@ export class AppService {
     detail.views = [{ state: 'frozen', ySplit: 1 }]
     detail.autoFilter = { from: 'A1', to: 'F1' }
 
-    await workbook.xlsx.writeFile(result.filePath)
-    return result.filePath
+    return {
+      fileName: `rekap-absensi-${context.className}-${input.startDate}-${input.endDate}.xlsx`,
+      data: Buffer.from(await workbook.xlsx.writeBuffer())
+    }
   }
 
   getGradeConfig(input: { semesterId: number; classId: number }): { schemeId?: number; groups: SummativeGroup[] } {
@@ -830,7 +815,7 @@ export class AppService {
     academicYearId: number
     semesterId: number
     classId: number
-  }): Promise<string | null> {
+  }): Promise<{ fileName: string; data: Buffer }> {
     const context = this.database.db
       .prepare(`SELECT class_name AS className, subject_name AS subjectName
                 FROM classes WHERE id = ? AND academic_year_id = ?`)
@@ -838,9 +823,7 @@ export class AppService {
     if (!context) throw new Error('Kelas dan mata pelajaran yang dipilih tidak ditemukan.')
 
     const templateName = input.type === 'SUMATIF' ? 'Template Sumatif.xlsx' : 'Template PAS.xlsx'
-    const templatePath = app.isPackaged
-      ? path.join(process.resourcesPath, 'templates', templateName)
-      : path.join(app.getAppPath(), 'resources', 'templates', templateName)
+    const templatePath = path.join(this.templatesDir, templateName)
     if (!fs.existsSync(templatePath)) {
       throw new Error(`Template export tidak ditemukan: ${templateName}`)
     }
@@ -855,15 +838,7 @@ export class AppService {
     })
 
     const fileName = buildGradeExportFileName(input.type, context)
-    const result = await dialog.showSaveDialog({
-      title: input.type === 'SUMATIF' ? 'Export Nilai Sumatif' : 'Export Nilai PAS',
-      defaultPath: path.join(app.getPath('documents'), fileName),
-      filters: [{ name: 'Excel', extensions: ['xlsx'] }]
-    })
-    if (result.canceled || !result.filePath) return null
-
-    await workbook.xlsx.writeFile(result.filePath)
-    return result.filePath
+    return { fileName, data: Buffer.from(await workbook.xlsx.writeBuffer()) }
   }
 
   private assertScore(score: number): void {
@@ -943,7 +918,7 @@ export class AppService {
     }
     const lastBackup = this.database.db.prepare("SELECT value FROM app_settings WHERE key = 'last_backup_at'").get() as { value: string } | undefined
     return {
-      appVersion: app.getVersion(),
+      appVersion: this.appVersion,
       environment: this.environment,
       databasePath: this.database.dbPath,
       databaseSizeBytes: fs.existsSync(this.database.dbPath) ? fs.statSync(this.database.dbPath).size : 0,
@@ -961,31 +936,16 @@ export class AppService {
     }
   }
 
-  async createBackup(): Promise<string | null> {
-    const source = this.database.createBackup('manual')
-    const result = await dialog.showSaveDialog({
-      title: 'Simpan Backup Database',
-      defaultPath: path.basename(source),
-      filters: [{ name: 'SQLite Database', extensions: ['db'] }]
-    })
-    if (result.canceled || !result.filePath) return source
-    fs.copyFileSync(source, result.filePath)
-    return result.filePath
+  createBackup(): string {
+    return this.database.createBackup('manual')
   }
 
-  async applySqlPatch(): Promise<{ patchId: string; patchName: string; backupPath: string }> {
-    const result = await dialog.showOpenDialog({
-      title: 'Pilih SQL Patch',
-      properties: ['openFile'],
-      filters: [{ name: 'SQL Patch', extensions: ['sql', 'ejpatch'] }]
-    })
-    if (result.canceled || result.filePaths.length === 0) throw new Error('Tidak ada file patch yang dipilih.')
-    const filePath = result.filePaths[0]
-    const sql = fs.readFileSync(filePath, 'utf8')
+  applySqlPatch(input: { sql: string; patchName: string }): { patchId: string; patchName: string; backupPath: string } {
+    const { sql } = input
     if (!sql.trim()) throw new Error('File patch kosong.')
     const checksum = crypto.createHash('sha256').update(sql).digest('hex')
     const patchId = checksum.slice(0, 16)
-    const patchName = path.basename(filePath)
+    const patchName = path.basename(input.patchName)
     const existing = this.database.db.prepare('SELECT patch_id FROM applied_patches WHERE patch_id = ?').get(patchId)
     if (existing) throw new Error('Patch ini sudah pernah diterapkan.')
     const backupPath = this.database.createBackup(`pre-patch-${patchId}`)

@@ -8,8 +8,14 @@
   "private": true,
   "scripts": {
     "dev": "cross-env APP_ENV=dev electron-vite dev",
+    "dev:web": "npm run build:web && tsx watch src/server/index.ts",
     "dev:prod": "cross-env APP_ENV=prod electron-vite dev",
     "build": "electron-vite build",
+    "build:web": "vite build --config vite.web.config.ts",
+    "setup:web": "npm rebuild better-sqlite3",
+    "setup:desktop": "electron-builder install-app-deps",
+    "start:web": "tsx src/server/index.ts",
+    "web": "npm run build:web && npm run start:web",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "verify": "npm run typecheck && npm run build",
     "dist:dev": "cross-env APP_ENV=dev electron-vite build && electron-builder --config electron-builder.dev.yml --mac dmg zip --arm64 --publish never",
@@ -23,10 +29,13 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^3.0.0",
+    "@fastify/multipart": "^10.1.0",
+    "@fastify/static": "^10.1.0",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "11.10.0",
     "electron-updater": "^6.3.9",
     "exceljs": "^4.4.0",
+    "fastify": "^5.10.0",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -45,6 +54,7 @@
     "electron-vite": "^2.3.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.23.1",
     "typescript": "^5.7.2",
     "vite": "^5.4.11"
   },

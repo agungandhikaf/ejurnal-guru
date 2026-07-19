@@ -120,6 +120,13 @@ export class AppDatabase {
     return target
   }
 
+  setAdminCode(code: string): void {
+    if (code.length < 8) throw new Error('Kode admin web minimal 8 karakter.')
+    this.db
+      .prepare("UPDATE users SET code_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE username = 'root' AND role = 'ADMIN'")
+      .run(bcrypt.hashSync(code, 12))
+  }
+
   private cleanupBackups(keep: number): void {
     const files = fs
       .readdirSync(this.backupDir)

@@ -1,5 +1,7 @@
 export const IPC = {
   AUTH_LOGIN: 'auth:login',
+  AUTH_LOGOUT: 'auth:logout',
+  AUTH_SESSION: 'auth:session',
   AUTH_OPTIONS: 'auth:options',
   ADMIN_TEACHERS_LIST: 'admin:teachers:list',
   ADMIN_TEACHERS_CREATE: 'admin:teachers:create',

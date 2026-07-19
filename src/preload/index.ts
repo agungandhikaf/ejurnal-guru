@@ -8,7 +8,9 @@ const invoke = <T = unknown>(channel: string, ...args: unknown[]): Promise<ApiRe
 const api = {
   auth: {
     options: () => invoke(IPC.AUTH_OPTIONS),
-    login: (payload: unknown) => invoke(IPC.AUTH_LOGIN, payload)
+    login: (payload: unknown) => invoke(IPC.AUTH_LOGIN, payload),
+    logout: () => invoke(IPC.AUTH_LOGOUT),
+    session: () => invoke(IPC.AUTH_SESSION)
   },
   admin: {
     listTeachers: () => invoke(IPC.ADMIN_TEACHERS_LIST),

@@ -4,6 +4,7 @@ import type { UpdateStatus } from '@shared/types'
 import { unwrap } from '../lib/api'
 
 export default function UpdatePanel(): JSX.Element {
+  const isWeb = !navigator.userAgent.includes('Electron')
   const [status, setStatus] = useState<UpdateStatus>({ state: 'idle' })
   const [error, setError] = useState('')
 
@@ -16,6 +17,10 @@ export default function UpdatePanel(): JSX.Element {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Gagal memeriksa pembaruan.')
     }
+  }
+
+  if (isWeb) {
+    return <div className="card p-5"><h3 className="font-bold text-slate-900">Pembaruan Aplikasi Web</h3><p className="mt-2 text-sm text-slate-500">Versi web diperbarui oleh administrator pada laptop server. Pengguna selalu memperoleh versi terbaru saat memuat ulang halaman.</p></div>
   }
 
   return (

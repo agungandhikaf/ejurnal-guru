@@ -23,7 +23,9 @@
   },
   "include": [
     "electron-vite.config.*",
+    "vite.web.config.*",
     "src/main/**/*.ts",
+    "src/server/**/*.ts",
     "src/preload/**/*.ts",
     "src/shared/**/*.ts"
   ]
